@@ -170,18 +170,32 @@ def link_existing():
     Prima le corrispondenze esatte (titolo o nome IGDB); il sottotitolo vale solo per i giochi che dalla stessa
     piattaforma non ne hanno già una esatta (MGS V: The Phantom Pain sì, Ground Zeroes no)."""
     with db() as con:
-        games = [(g["id"], t) for g in con.execute("SELECT id, title, igdb_name FROM games")
-                 for t in (g["title"], g["igdb_name"]) if t]
-        for loose in (False, True):
-            taken = {(r["game_id"], r["source"]) for r in
-                     con.execute("SELECT game_id, source FROM candidates WHERE game_id IS NOT NULL")}
-            for c in con.execute("SELECT id, title, source FROM candidates WHERE status='new' AND game_id IS NULL").fetchall():
-                gid = next((gid for gid, t in games if same_game(c["title"], t, loose)
-                            and not (loose and (gid, c["source"]) in taken)), None)
-                if gid:
-                    con.execute("UPDATE candidates SET status='confirmed', game_id=? WHERE id=?", (gid, c["id"]))
-                    con.execute("UPDATE games SET hours=COALESCE(hours, (SELECT hours FROM candidates WHERE id=?))"
-                                " WHERE id=?", (c["id"], gid))
+        exact, loose = {}, {}   # titolo normalizzato -> id del gioco (il primo inserito vince)
+        for g in con.execute("SELECT id, title, igdb_name FROM games ORDER BY id"):
+            for t in (g["title"], g["igdb_name"]):
+                if t:
+                    n = norm(t)
+                    exact.setdefault(n, g["id"])
+                    if len(n) >= 6:
+                        loose.setdefault(n, g["id"])
+        taken = {(r["game_id"], r["source"]) for r in
+                 con.execute("SELECT game_id, source FROM candidates WHERE game_id IS NOT NULL")}
+        todo = con.execute("SELECT id, title, source FROM candidates WHERE status='new' AND game_id IS NULL").fetchall()
+        links = []
+        for c in todo:   # prima passata: titolo identico
+            gid = exact.get(norm(c["title"]))
+            if gid:
+                links.append((gid, c["id"]))
+                taken.add((gid, c["source"]))
+        linked = {cid for _, cid in links}
+        for c in todo:   # seconda passata: sottotitolo in più, se quel gioco non ha già un candidato da questa fonte
+            gid = c["id"] not in linked and loose.get(head(c["title"]))
+            if gid and (gid, c["source"]) not in taken:
+                links.append((gid, c["id"]))
+        for gid, cid in links:
+            con.execute("UPDATE candidates SET status='confirmed', game_id=? WHERE id=?", (gid, cid))
+            con.execute("UPDATE games SET hours=COALESCE(hours, (SELECT hours FROM candidates WHERE id=?))"
+                        " WHERE id=?", (cid, gid))
 
 
 # --- Steam ----------------------------------------------------------------------

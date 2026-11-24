@@ -272,10 +272,11 @@ $('#form').addEventListener('submit', async e => {
       loadSync();
       toast('Aggiunto al registro');
       await load();
+      setTimeout(load, 2500);   // la copertina arriva da IGDB in background
       return;
     }
     if (editing) await api(`/api/games/${editing.id}`, {method: 'PUT', body: JSON.stringify(body)});
-    else await api('/api/games', {method: 'POST', body: JSON.stringify(body)});
+    else { await api('/api/games', {method: 'POST', body: JSON.stringify(body)}); setTimeout(load, 2500); }
     $('#dlg').close();
     await load();
   } catch (err) { toast('Errore: ' + err.message, 5000); }

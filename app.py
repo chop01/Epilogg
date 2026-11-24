@@ -7,6 +7,7 @@ import csv
 import io
 import os
 import sqlite3
+import threading
 import time
 from difflib import SequenceMatcher
 from contextlib import asynccontextmanager
@@ -195,14 +196,19 @@ def create_game(g: GameIn, source: str = "manual", hours: float | None = None) -
             (g.title.strip(), g.platform.strip(), int(g.emulated), g.completed_on and g.completed_on.isoformat(),
              g.rating, g.notes, hours, source, now(), now()))
         gid = cur.lastrowid
-    if igdb_enabled():
-        try:
-            m, sim = find_match(g.title, g.platform)
-            if m:
-                apply_match(gid, m, score=sim)
-        except Exception:
-            pass  # la copertina si può abbinare dopo dalla scheda
+    if igdb_enabled():   # in background: la risposta non aspetta IGDB, la copertina compare poco dopo
+        threading.Thread(target=match_new_game, args=(gid, g.title, g.platform), daemon=True).start()
     return gid
+
+
+def match_new_game(gid: int, title: str, platform: str):
+    try:
+        m, sim = find_match(title, platform)
+        if m:
+            apply_match(gid, m, score=sim)
+            connectors.link_existing()   # il nome IGDB può collegare altri candidati
+    except Exception:
+        pass  # la copertina si può abbinare dopo dalla scheda
 
 
 @app.post("/api/games", status_code=201)
