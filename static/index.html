@@ -41,6 +41,11 @@
   .meta { padding: 8px 10px 10px; }
   .meta .t { font-weight: 600; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .meta .s { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .plat { position: absolute; top: 6px; left: 6px; width: 26px; height: 26px; border-radius: 50%; display: flex;
+          align-items: center; justify-content: center; background: rgba(10,12,16,.85);
+          box-shadow: 0 0 0 1px rgba(229,228,226,.45); }
+  .plat svg { width: 16px; height: 16px; }
+  .plat + .warn { left: 38px; }
   .warn { position: absolute; top: 6px; left: 6px; background: var(--mid); color: #1a1a1a; border-radius: 6px; padding: 0 7px; font-weight: 700; font-size: 13px; }
   .badge { display: inline-block; background: var(--panel2); border-radius: 5px; padding: 0 5px; margin-right: 4px; }
   .empty { padding: 40px 24px; color: var(--muted); }
@@ -105,7 +110,7 @@
     dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100dvh - 16px); overflow-y: auto; }
     form.edit { padding: 14px; gap: 10px; }
     .actions button { padding: 8px 12px; }
-    .syncbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; }
+    .syncbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; }
     .src { min-width: 0; padding: 8px; font-size: 12px; }
     .src h3 { flex-direction: column; align-items: stretch; gap: 6px; font-size: 14px; }
     .src h3 button { padding: 5px 6px; font-size: 13px; }
@@ -155,6 +160,7 @@
     <option value="date">Più recenti</option>
     <option value="rating">Voto</option>
     <option value="title">Titolo</option>
+    <option value="hours">Ore giocate</option>
   </select>
   <label style="display:flex;align-items:center;gap:6px;color:var(--muted)" title="Copertina mancante o abbinamento automatico incerto">
     <input type="checkbox" id="fCheck"> Da controllare <span id="nCheck"></span></label>
@@ -190,6 +196,8 @@
     <label>Piattaforma <input name="platform" required list="platList" maxlength="50"></label>
     <label>Completato il <input name="completed_on" type="date"></label>
     <label>Voto (0–10) <input name="rating" type="number" min="0" max="10" step="0.5"></label>
+    <label>Ore giocate <input name="hours" type="number" min="0" step="0.1"></label>
+    <div class="full" id="platInfo" style="font-size:13px;color:var(--muted)"></div>
     <label class="full">Note <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
     <div class="igdb" id="igdbBox">
       <div class="cur" id="igdbCur"></div>
@@ -228,6 +236,14 @@ const year = g => g.completed_on ? g.completed_on.slice(0, 4) : '';
 const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString('it-IT', {day: 'numeric', month: 'short', year: 'numeric'}) : 'data ?';
 const scoreColor = v => v >= 8.5 ? 'var(--good)' : v >= 6.5 ? 'var(--mid)' : 'var(--bad)';
 const doubtful = g => !g.igdb_id || !g.cover || (!g.match_manual && g.match_score != null && g.match_score < 0.85);
+const fmtHours = h => h == null ? '' : h >= 10 ? `${Math.round(h)} h` : `${Number(h).toFixed(1).replace('.0', '')} h`;
+const playLine = g => [g.hours != null ? `⏱ ${fmtHours(g.hours)}` : '', g.ach_total ? `🏆 ${g.ach_done}/${g.ach_total}` : '']
+  .filter(Boolean).join(' · ');
+const full = g => g.ach_total > 0 && g.ach_done >= g.ach_total;
+// coppa con sfumatura platino (non l'emoji, che è dorata)
+const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#f4f6f8"/><stop offset=".5" stop-color="#b9c4ce"/><stop offset="1" stop-color="#eef1f4"/></linearGradient></defs>
+  <path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
 
 async function load() {
@@ -251,6 +267,7 @@ function render() {
     && (!q || g.title.toLowerCase().includes(q) || (g.igdb_name || '').toLowerCase().includes(q)));
   const s = $('#sort').value;
   if (s === 'rating') list.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+  else if (s === 'hours') list.sort((a, b) => (b.hours ?? -1) - (a.hours ?? -1));
   else if (s === 'title') list.sort((a, b) => (a.igdb_name || a.title).localeCompare(b.igdb_name || b.title));
 
   // riepilogo: totale e media seguono i filtri piattaforma/ricerca, il grafico anni no
@@ -271,10 +288,12 @@ function render() {
     const bg = g.cover ? `style="background-image:url('/covers/${encodeURIComponent(g.cover)}')"` : '';
     return `<div class="card" data-id="${g.id}">
       <div class="cover" ${bg}>${g.cover ? '' : esc(name)}
+        ${full(g) ? `<span class="plat" title="Tutti gli achievement (${g.ach_done}/${g.ach_total})">${PLAT_SVG}</span>` : ''}
         ${doubtful(g) ? `<span class="warn" title="Abbinamento IGDB da controllare: apri la scheda">?</span>` : ''}
         ${g.rating != null ? `<span class="score" style="color:${scoreColor(g.rating)}">${g.rating}</span>` : ''}</div>
       <div class="meta"><div class="t" title="${esc(name)}">${esc(name)}</div>
-        <div class="s"><span class="badge">${esc(g.platform)}</span>${fmtDate(g.completed_on)}</div></div>
+        <div class="s"><span class="badge">${esc(g.platform)}</span>${fmtDate(g.completed_on)}</div>
+        ${playLine(g) ? `<div class="s">${playLine(g)}</div>` : ''}</div>
     </div>`;
   }).join('');
   $('#empty').hidden = list.length > 0;
@@ -288,6 +307,13 @@ function openDialog(g) {
   f.platform.value = g?.platform ?? '';
   f.completed_on.value = g?.completed_on ?? new Date().toISOString().slice(0, 10);
   f.rating.value = g?.rating ?? '';
+  f.hours.value = g?.manual_hours ?? '';
+  f.hours.placeholder = g?.plat_hours != null ? `${g.plat_hours}` : '';
+  const SRCN = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
+  $('#platInfo').textContent = g?.plat_source
+    ? `Dalla piattaforma (${SRCN[g.plat_source] || g.plat_source}): ${g.plat_hours != null ? fmtHours(g.plat_hours) : 'ore non disponibili'}`
+      + (g.ach_total ? ` · ${g.ach_done}/${g.ach_total} achievement` : '') + (g.manual_hours != null ? ' — le ore scritte qui hanno la precedenza' : '')
+    : '';
   f.notes.value = g?.notes ?? '';
   $('#btnDel').hidden = !g;
   $('#igdbBox').hidden = !g || !cfg.igdb;   // per un gioco nuovo l'abbinamento è automatico al salvataggio
@@ -308,6 +334,7 @@ $('#form').addEventListener('submit', async e => {
   const body = {
     title: f.elements.title.value, platform: f.platform.value,
     completed_on: f.completed_on.value || null, rating: f.rating.value === '' ? null : Number(f.rating.value),
+    hours: f.hours.value === '' ? null : Number(f.hours.value),
     notes: f.notes.value || null,
   };
   try {
@@ -467,6 +494,9 @@ $('#clist').addEventListener('click', async e => {
     f.platform.value = c.platform;
     f.completed_on.value = c.signal_date || c.last_played || '';
     f.notes.value = '';
+    f.hours.placeholder = c.hours != null ? `${c.hours}` : '';
+    $('#platInfo').textContent = (c.hours != null ? `Dalla piattaforma: ${fmtHours(c.hours)}` : '')
+      + (c.ach_total ? ` · ${c.ach_done}/${c.ach_total} achievement` : '');
     f.rating.focus();
     return;
   }

@@ -161,6 +161,7 @@ class GameIn(BaseModel):
     completed_on: date | None = None
     rating: float | None = Field(default=None, ge=0, le=10)
     notes: str | None = Field(default=None, max_length=5000)
+    hours: float | None = Field(default=None, ge=0, le=100000)   # manuale: ha la precedenza sulle piattaforme
 
     @field_validator("rating")
     @classmethod
@@ -187,11 +188,34 @@ def row(r: sqlite3.Row) -> dict:
     return dict(r)
 
 
+def platform_stats(con) -> dict:
+    """game_id -> dati del candidato collegato più adatto: stessa piattaforma del gioco, altrimenti quello con più
+    ore (un gioco può essere collegato a Steam e Xbox insieme)."""
+    best = {}
+    for c in con.execute("SELECT c.game_id, c.source, c.platform, c.hours, c.ach_done, c.ach_total, g.platform gp"
+                         " FROM candidates c JOIN games g ON g.id = c.game_id"):
+        key = (c["platform"].lower() == c["gp"].lower(), c["hours"] or 0, c["ach_total"] or 0)
+        if c["game_id"] not in best or key > best[c["game_id"]][0]:
+            best[c["game_id"]] = (key, c)
+    return {gid: {"plat_source": c["source"], "plat_hours": c["hours"], "ach_done": c["ach_done"],
+                  "ach_total": c["ach_total"] or None}
+            for gid, (_, c) in best.items()}
+
+
+def with_stats(r: sqlite3.Row, stats: dict) -> dict:
+    g = dict(r)
+    g.update(stats.get(g["id"], {"plat_source": None, "plat_hours": None, "ach_done": None, "ach_total": None}))
+    g["manual_hours"] = g["hours"]
+    g["hours"] = g["hours"] if g["hours"] is not None else g["plat_hours"]
+    return g
+
+
 @app.get("/api/games")
 def list_games():
     with db() as con:
         rows = con.execute("SELECT * FROM games ORDER BY completed_on DESC NULLS LAST, id DESC").fetchall()
-    return [row(r) for r in rows]
+        stats = platform_stats(con)
+    return [with_stats(r, stats) for r in rows]
 
 
 @app.get("/api/config")
@@ -199,13 +223,13 @@ def config():
     return {"igdb": igdb_enabled()}
 
 
-def create_game(g: GameIn, source: str = "manual", hours: float | None = None) -> int:
+def create_game(g: GameIn, source: str = "manual") -> int:
     with db() as con:
         cur = con.execute(
             "INSERT INTO games (title, platform, completed_on, rating, notes, hours, source, created_at,"
             " updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (g.title.strip(), g.platform.strip(), g.completed_on and g.completed_on.isoformat(),
-             g.rating, g.notes, hours, source, now(), now()))
+             g.rating, g.notes, g.hours, source, now(), now()))
         gid = cur.lastrowid
     if igdb_enabled():   # in background: la risposta non aspetta IGDB, la copertina compare poco dopo
         threading.Thread(target=match_new_game, args=(gid, g.title, g.platform), daemon=True).start()
@@ -231,19 +255,20 @@ def add_game(g: GameIn):
 def get_game(gid: int):
     with db() as con:
         r = con.execute("SELECT * FROM games WHERE id=?", (gid,)).fetchone()
+        stats = platform_stats(con)
     if not r:
         raise HTTPException(404)
-    return row(r)
+    return with_stats(r, stats)
 
 
 @app.put("/api/games/{gid}")
 def update_game(gid: int, g: GameIn):
     get_game(gid)
     with db() as con:
-        con.execute("UPDATE games SET title=?, platform=?, completed_on=?, rating=?, notes=?, updated_at=?"
+        con.execute("UPDATE games SET title=?, platform=?, completed_on=?, rating=?, notes=?, hours=?, updated_at=?"
                     " WHERE id=?",
                     (g.title.strip(), g.platform.strip(),
-                     g.completed_on and g.completed_on.isoformat(), g.rating, g.notes, now(), gid))
+                     g.completed_on and g.completed_on.isoformat(), g.rating, g.notes, g.hours, now(), gid))
     return get_game(gid)
 
 
@@ -333,7 +358,7 @@ def confirm_candidate(cid: int, g: GameIn):
         c = con.execute("SELECT * FROM candidates WHERE id=?", (cid,)).fetchone()
     if not c:
         raise HTTPException(404)
-    gid = create_game(g, source=c["source"], hours=c["hours"])
+    gid = create_game(g, source=c["source"])
     with db() as con:
         con.execute("UPDATE candidates SET status='confirmed', game_id=?, updated_at=? WHERE id=?", (gid, now(), cid))
     connectors.link_existing()   # lo stesso gioco su un'altra piattaforma risulta già registrato
@@ -354,7 +379,7 @@ def candidate_status(cid: int, action: str):
 def export_csv():
     buf = io.StringIO()
     w = csv.writer(buf)
-    cols = ["completed_on", "title", "platform", "rating", "hours", "notes", "igdb_name", "igdb_id", "release_year"]
+    cols = ["completed_on", "title", "platform", "rating", "hours", "ach_done", "ach_total", "notes", "igdb_name", "igdb_id", "release_year"]
     w.writerow(cols)
     for g in list_games():
         w.writerow([g[c] for c in cols])

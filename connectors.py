@@ -166,7 +166,8 @@ def same_game(cand: str, known: str, loose: bool = False) -> bool:
 
 
 def link_existing():
-    """Candidati nuovi che corrispondono a un gioco del registro: passano a "già nel registro" e gli danno le ore.
+    """Candidati nuovi che corrispondono a un gioco del registro: passano a "già nel registro" (ore e achievement
+    del registro si leggono da loro, vedi app.platform_stats).
     Prima le corrispondenze esatte (titolo o nome IGDB); il sottotitolo vale solo per i giochi che dalla stessa
     piattaforma non ne hanno già una esatta (MGS V: The Phantom Pain sì, Ground Zeroes no)."""
     with db() as con:
@@ -194,8 +195,6 @@ def link_existing():
                 links.append((gid, c["id"]))
         for gid, cid in links:
             con.execute("UPDATE candidates SET status='confirmed', game_id=? WHERE id=?", (gid, cid))
-            con.execute("UPDATE games SET hours=COALESCE(hours, (SELECT hours FROM candidates WHERE id=?))"
-                        " WHERE id=?", (cid, gid))
 
 
 # --- Steam ----------------------------------------------------------------------
@@ -280,10 +279,35 @@ def xbox_platform(devices) -> str:
     return "Xbox 360" if devices == {"Xbox360"} else "Xbox"
 
 
+def xbox_minutes(client, xuid: str, title_ids: list[str]) -> dict:
+    """titleId -> minuti giocati (statistica MinutesPlayed), 100 titoli per richiesta."""
+    out = {}
+    for i in range(0, len(title_ids), 100):
+        body = {"xuids": [xuid], "groups": [],
+                "stats": [{"name": "MinutesPlayed", "titleId": t} for t in title_ids[i:i + 100]]}
+        r = client.post("https://xbl.io/api/v2/player/stats", json=body,
+                        headers={"X-Authorization": XBL_KEY, "Accept": "application/json"})
+        if r.status_code == 429:
+            raise RateLimited("OpenXBL: limite orario raggiunto")
+        r.raise_for_status()
+        j = r.json()
+        for coll in (j.get("content", j) or {}).get("statlistscollection", []):
+            for st in coll.get("stats", []):
+                if st.get("name") == "MinutesPlayed" and str(st.get("value", "")).isdigit():
+                    out[str(st["titleid"])] = int(st["value"])
+    return out
+
+
 def sync_xbox():
     with httpx.Client(timeout=30) as client:
-        titles = xbl_get(client, "achievements").get("titles", [])
+        summary = xbl_get(client, "achievements")
+        titles = summary.get("titles", [])
         have = known("xbox")
+        # ore di tutti i titoli in poche richieste, prima degli achievement (che possono fermarsi al limite orario)
+        minutes = xbox_minutes(client, summary.get("xuid"), [str(t.get("titleId")) for t in titles if t.get("titleId")])
+        hours_of = lambda ext: round(minutes[ext] / 60, 1) if ext in minutes else None
+        for ext in have:
+            update_light("xbox", ext, hours=hours_of(ext))
         fetched = 0
         for t in titles:
             if t.get("type") not in (None, "Game"):
@@ -320,7 +344,7 @@ def sync_xbox():
             if full and sig in (None, "last"):
                 sig, label = "100", "Tutto il gamerscore"
             upsert({"source": "xbox", "ext_id": ext, "title": t.get("name") or ext, "platform": xbox_platform(devices),
-                    "image_url": t.get("displayImage"), "hours": None, "ach_done": done, "ach_total": total,
+                    "image_url": t.get("displayImage"), "hours": hours_of(ext), "ach_done": done, "ach_total": total,
                     "first_played": min((a["date"] for a in achs if a["date"]), default=None), "last_played": day(last),
                     "signal": sig, "signal_label": label, "signal_date": sdate, "fingerprint": fp})
     return f"{len(titles)} titoli, {fetched} aggiornati"
@@ -412,9 +436,11 @@ def sync_psn():
         raise RateLimited("PSN: troppe richieste") from e
 
 
+
 # --- orchestrazione ------------------------------------------------------------
 
 SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn}
+SCHEDULED = ("steam", "xbox", "psn")
 
 
 def run(source: str) -> bool:
@@ -447,7 +473,7 @@ def scheduler():
         with db() as con:
             state = {r["source"]: dict(r) for r in con.execute("SELECT * FROM sync_state")}
         for src, ok in configured().items():
-            if not ok:
+            if not ok or src not in SCHEDULED:
                 continue
             st = state.get(src) or {}
             last_ok = st.get("last_ok")
