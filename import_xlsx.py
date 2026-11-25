@@ -11,7 +11,7 @@ import openpyxl
 
 from store import db, init_db, now
 
-# piattaforma nel foglio -> nome nell'app; "(emulato)" diventa il flag emulated
+# piattaforma nel foglio -> nome nell'app; "(emulato)" finisce nelle note
 PLATFORMS = {"steam": "Steam", "pc": "PC", "gamepass": "Game Pass", "switch": "Switch",
              "ps5": "PS5", "ps4": "PS4", "ps3": "PS3", "ps2": "PS2", "psx": "PS1", "gba": "GBA"}
 
@@ -37,9 +37,9 @@ def main(path):
             if con.execute("SELECT 1 FROM games WHERE title=? AND completed_on IS ?", (title.strip(), d)).fetchone():
                 skipped += 1
                 continue
-            con.execute("INSERT INTO games (title, platform, emulated, completed_on, rating, source, created_at,"
+            con.execute("INSERT INTO games (title, platform, notes, completed_on, rating, source, created_at,"
                         " updated_at) VALUES (?,?,?,?,?, 'excel', ?, ?)",
-                        (title.strip(), p, int(emu), d, rating, now(), now()))
+                        (title.strip(), p, "Emulato" if emu else None, d, rating, now(), now()))
             added += 1
     print(f"importati {added}, già presenti {skipped}")
 

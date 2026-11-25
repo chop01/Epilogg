@@ -142,6 +142,15 @@
   <input type="search" id="q" placeholder="Cerca titolo…">
   <select id="fYear"><option value="">Tutti gli anni</option></select>
   <select id="fPlat"><option value="">Tutte le piattaforme</option></select>
+  <select id="fVoto">
+    <option value="">Tutti i voti</option>
+    <option value="9">Da 9 in su</option>
+    <option value="8">Da 8 in su</option>
+    <option value="7">Da 7 in su</option>
+    <option value="6">Da 6 in su</option>
+    <option value="low">Sotto il 6</option>
+    <option value="none">Senza voto</option>
+  </select>
   <select id="sort">
     <option value="date">Più recenti</option>
     <option value="rating">Voto</option>
@@ -161,7 +170,7 @@
     <input type="search" id="cq" placeholder="Cerca titolo…">
     <select id="cStatus">
       <option value="new">Da valutare</option>
-      <option value="dismissed">Scartati</option>
+      <option value="dismissed">Non completati</option>
       <option value="confirmed">Già nel registro</option>
     </select>
     <select id="cSrc"><option value="">Tutte le fonti</option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option></select>
@@ -181,7 +190,6 @@
     <label>Piattaforma <input name="platform" required list="platList" maxlength="50"></label>
     <label>Completato il <input name="completed_on" type="date"></label>
     <label>Voto (0–10) <input name="rating" type="number" min="0" max="10" step="0.5"></label>
-    <label class="check"><input type="checkbox" name="emulated"> Emulato</label>
     <label class="full">Note <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
     <div class="igdb" id="igdbBox">
       <div class="cur" id="igdbCur"></div>
@@ -236,8 +244,10 @@ async function load() {
 
 function render() {
   const q = $('#q').value.trim().toLowerCase(), fy = $('#fYear').value, fp = $('#fPlat').value, fc = $('#fCheck').checked;
+  const fv = $('#fVoto').value;
+  const votoOk = g => !fv || (fv === 'none' ? g.rating == null : fv === 'low' ? g.rating != null && g.rating < 6 : g.rating != null && g.rating >= Number(fv));
   $('#nCheck').textContent = `(${games.filter(doubtful).length})`;
-  let list = games.filter(g => (!fy || year(g) === fy) && (!fp || g.platform === fp) && (!fc || doubtful(g))
+  let list = games.filter(g => (!fy || year(g) === fy) && (!fp || g.platform === fp) && (!fc || doubtful(g)) && votoOk(g)
     && (!q || g.title.toLowerCase().includes(q) || (g.igdb_name || '').toLowerCase().includes(q)));
   const s = $('#sort').value;
   if (s === 'rating') list.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
@@ -264,7 +274,7 @@ function render() {
         ${doubtful(g) ? `<span class="warn" title="Abbinamento IGDB da controllare: apri la scheda">?</span>` : ''}
         ${g.rating != null ? `<span class="score" style="color:${scoreColor(g.rating)}">${g.rating}</span>` : ''}</div>
       <div class="meta"><div class="t" title="${esc(name)}">${esc(name)}</div>
-        <div class="s"><span class="badge">${esc(g.platform)}${g.emulated ? ' · emu' : ''}</span>${fmtDate(g.completed_on)}</div></div>
+        <div class="s"><span class="badge">${esc(g.platform)}</span>${fmtDate(g.completed_on)}</div></div>
     </div>`;
   }).join('');
   $('#empty').hidden = list.length > 0;
@@ -278,7 +288,6 @@ function openDialog(g) {
   f.platform.value = g?.platform ?? '';
   f.completed_on.value = g?.completed_on ?? new Date().toISOString().slice(0, 10);
   f.rating.value = g?.rating ?? '';
-  f.emulated.checked = !!g?.emulated;
   f.notes.value = g?.notes ?? '';
   $('#btnDel').hidden = !g;
   $('#igdbBox').hidden = !g || !cfg.igdb;   // per un gioco nuovo l'abbinamento è automatico al salvataggio
@@ -297,7 +306,7 @@ $('#form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
   const body = {
-    title: f.elements.title.value, platform: f.platform.value, emulated: f.emulated.checked,
+    title: f.elements.title.value, platform: f.platform.value,
     completed_on: f.completed_on.value || null, rating: f.rating.value === '' ? null : Number(f.rating.value),
     notes: f.notes.value || null,
   };
@@ -335,7 +344,7 @@ async function igdbSearch() {
   if (!q) return;
   $('#igdbRes').textContent = 'Cerco…';
   try {
-    const res = await api('/api/igdb/search?q=' + encodeURIComponent(q));
+    const res = await api('/api/igdb/search?q=' + encodeURIComponent(q) + '&platform=' + encodeURIComponent($('#form').platform.value));
     $('#igdbRes').innerHTML = res.length ? res.map(r => `<div data-igdb="${r.id}" title="${esc(r.platforms.join(', '))}">
         ${r.cover_id ? `<img loading="lazy" src="https://images.igdb.com/igdb/image/upload/t_cover_small/${r.cover_id}.jpg">` : '<span class="ph"></span>'}
         ${esc(r.name)}${r.year ? ` (${r.year})` : ''}</div>`).join('') : 'Nessun risultato.';
@@ -375,7 +384,7 @@ $('#years').addEventListener('click', e => {
   $('#fYear').value = $('#fYear').value === d.dataset.y ? '' : d.dataset.y;
   render();
 });
-['#q', '#fYear', '#fPlat', '#sort', '#fCheck'].forEach(s => $(s).addEventListener('input', render));
+['#q', '#fYear', '#fPlat', '#fVoto', '#sort', '#fCheck'].forEach(s => $(s).addEventListener('input', render));
 
 // --- dalle piattaforme ---------------------------------------------------------
 const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
@@ -433,7 +442,7 @@ function renderCands() {
     const ach = c.ach_total ? `${c.ach_done}/${c.ach_total} achievement` : 'nessun achievement';
     const sigTxt = c.signal === 'last' ? `${SIG.last}: <i>${esc(c.signal_label)}</i> · ${fmtDate(c.signal_date)} <span style="color:var(--muted)">(indizio debole)</span>`
       : c.signal ? `${SIG[c.signal]}: <i>${esc(c.signal_label)}</i> · ${fmtDate(c.signal_date)}` : 'Nessun indizio di fine';
-    const btns = st === 'new' ? `<button class="primary" data-ok="${c.id}">Completato</button><button data-dis="${c.id}">Scarta</button>`
+    const btns = st === 'new' ? `<button class="primary" data-ok="${c.id}">Completato</button><button data-dis="${c.id}">Non completato</button>`
       : st === 'dismissed' ? `<button data-res="${c.id}">Ripristina</button>` : '';
     return `<div class="cand">
       ${c.image_url ? `<img loading="lazy" src="${esc(c.image_url)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph'}))">` : '<span class="ph"></span>'}

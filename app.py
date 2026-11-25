@@ -54,12 +54,21 @@ def igdb_query(endpoint: str, body: str):
     return r.json()
 
 
-def igdb_search(q: str, limit: int = 10):
-    q = q.replace('"', "")
-    rows = igdb_query("games", f'search "{q}"; fields name,first_release_date,cover.image_id,'
-                               f'platforms.abbreviation,parent_game,total_rating_count; where version_parent = null; limit {limit};')
-    out = []
+IGDB_FIELDS = "fields name,first_release_date,cover.image_id,platforms.abbreviation,parent_game,total_rating_count;"
+
+
+def igdb_search(q: str, limit: int = 10, contains: bool = False):
+    """Ricerca testuale di IGDB più una per nome (esatto, o "contiene" se contains=True): la ricerca testuale
+    non trova titoli corti con caratteri accentati ("Öoo" -> solo "Ooo" e "oOo: Ascension")."""
+    q = q.replace('"', "").strip()
+    by_name = f'*"{q}"*' if contains else f'"{q}"'
+    rows = igdb_query("games", f'{IGDB_FIELDS} where name ~ {by_name} & version_parent = null; limit {limit};')
+    rows += igdb_query("games", f'search "{q}"; {IGDB_FIELDS} where version_parent = null; limit {limit};')
+    out, seen = [], set()
     for g in rows:
+        if g["id"] in seen:
+            continue
+        seen.add(g["id"])
         ts = g.get("first_release_date")
         out.append({
             "id": g["id"],
@@ -96,7 +105,9 @@ def apply_match(game_id: int, m: dict, manual: bool = False, score: float | None
 # piattaforma dell'app -> abbreviazioni IGDB compatibili (bonus nell'abbinamento)
 PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S", "XONE"},
                  "PS5": {"PS5"}, "PS4": {"PS4"}, "PS3": {"PS3"}, "PS2": {"PS2"}, "PS1": {"PS1"},
-                 "GBA": {"GBA"}, "Switch": {"Switch", "NS2", "Switch 2"}}
+                 "GBA": {"GBA"}, "Switch": {"Switch", "NS2", "Switch 2"},
+                 "Xbox": {"XBOX", "X360", "XONE", "Series X|S"}, "Xbox 360": {"X360"},
+                 "PS Vita": {"Vita"}, "PSP": {"PSP"}}
 
 
 def similarity(title: str, name: str) -> float:
@@ -126,7 +137,8 @@ def score(title: str, platform: str, r: dict) -> float:
 def find_match(title: str, platform: str):
     """Miglior risultato IGDB e la sua somiglianza col titolo (0-1).
     Se la ricerca diretta non convince (refusi), riprova togliendo una parola per volta."""
-    cands = {r["id"]: r for r in igdb_search(title)}
+    # 50 risultati: per titoli molto portati ("Prince of Persia") i primi 10 sono tutti versioni anni '90
+    cands = {r["id"]: r for r in igdb_search(title, 50)}
     best = max(cands.values(), key=lambda r: score(title, platform, r), default=None)
     words = title.split()
     if (not best or similarity(title, best["name"]) < 0.85) and len(words) >= 2:
@@ -146,7 +158,6 @@ def find_match(title: str, platform: str):
 class GameIn(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     platform: str = Field(min_length=1, max_length=50)
-    emulated: bool = False
     completed_on: date | None = None
     rating: float | None = Field(default=None, ge=0, le=10)
     notes: str | None = Field(default=None, max_length=5000)
@@ -191,9 +202,9 @@ def config():
 def create_game(g: GameIn, source: str = "manual", hours: float | None = None) -> int:
     with db() as con:
         cur = con.execute(
-            "INSERT INTO games (title, platform, emulated, completed_on, rating, notes, hours, source, created_at,"
-            " updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (g.title.strip(), g.platform.strip(), int(g.emulated), g.completed_on and g.completed_on.isoformat(),
+            "INSERT INTO games (title, platform, completed_on, rating, notes, hours, source, created_at,"
+            " updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (g.title.strip(), g.platform.strip(), g.completed_on and g.completed_on.isoformat(),
              g.rating, g.notes, hours, source, now(), now()))
         gid = cur.lastrowid
     if igdb_enabled():   # in background: la risposta non aspetta IGDB, la copertina compare poco dopo
@@ -229,9 +240,9 @@ def get_game(gid: int):
 def update_game(gid: int, g: GameIn):
     get_game(gid)
     with db() as con:
-        con.execute("UPDATE games SET title=?, platform=?, emulated=?, completed_on=?, rating=?, notes=?, updated_at=?"
+        con.execute("UPDATE games SET title=?, platform=?, completed_on=?, rating=?, notes=?, updated_at=?"
                     " WHERE id=?",
-                    (g.title.strip(), g.platform.strip(), int(g.emulated),
+                    (g.title.strip(), g.platform.strip(),
                      g.completed_on and g.completed_on.isoformat(), g.rating, g.notes, now(), gid))
     return get_game(gid)
 
@@ -244,8 +255,9 @@ def delete_game(gid: int):
 
 
 @app.get("/api/igdb/search")
-def search(q: str):
-    return igdb_search(q)
+def search(q: str, platform: str = ""):
+    """Risultati ordinati come l'abbinamento automatico (titolo, piattaforma, popolarità), i primi 24."""
+    return sorted(igdb_search(q, 50, contains=True), key=lambda r: score(q, platform, r), reverse=True)[:24]
 
 
 @app.post("/api/games/{gid}/match")
@@ -342,7 +354,7 @@ def candidate_status(cid: int, action: str):
 def export_csv():
     buf = io.StringIO()
     w = csv.writer(buf)
-    cols = ["completed_on", "title", "platform", "emulated", "rating", "hours", "notes", "igdb_name", "igdb_id", "release_year"]
+    cols = ["completed_on", "title", "platform", "rating", "hours", "notes", "igdb_name", "igdb_id", "release_year"]
     w.writerow(cols)
     for g in list_games():
         w.writerow([g[c] for c in cols])
