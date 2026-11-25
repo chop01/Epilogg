@@ -46,7 +46,9 @@
   .empty { padding: 40px 24px; color: var(--muted); }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: min(560px, 94vw); padding: 0; }
   dialog::backdrop { background: rgba(0,0,0,.6); }
-  form.edit { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  form.edit { padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  form.edit input:not([type=checkbox]), form.edit textarea { width: 100%; min-width: 0; }
+  .lbl-short { display: none; }
   form.edit label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   form.edit .full { grid-column: 1 / -1; }
   form.edit label.check { flex-direction: row; align-items: center; gap: 8px; }
@@ -77,14 +79,50 @@
   .cand .sig.none { color: var(--muted); }
   .cand .btns { display: flex; gap: 6px; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; }
+
+  /* --- telefono --- */
+  @media (max-width: 640px) {
+    body { font-size: 14px; }
+    input, select, textarea { font-size: 16px; }   /* sotto i 16px iOS zooma al tocco */
+    header { padding: 12px 14px 6px; gap: 8px; flex-wrap: nowrap; }
+    h1 { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    header button { padding: 6px 10px; }
+    .lbl-long { display: none; }
+    .lbl-short { display: inline; }
+    .tabs { padding: 0 8px; }
+    .tabs button { padding: 10px; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 4px; }
+    .tile { min-width: 0; padding: 8px 10px; }
+    .tile b { font-size: 20px; }
+    .tile span { font-size: 12px; }
+    .years { grid-column: 1 / -1; min-width: 0; overflow-x: auto; height: 84px; padding: 8px 10px 0; }
+    .years div { flex: 0 0 26px; }
+    .filters { padding: 10px 14px; }
+    .filters input[type=search] { flex: 1 1 100%; min-width: 0; }
+    .filters select { flex: 1 1 40%; min-width: 0; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 6px 14px 30px; }
+    .meta { padding: 6px 8px 8px; }
+    dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100dvh - 16px); overflow-y: auto; }
+    form.edit { padding: 14px; gap: 10px; }
+    .actions button { padding: 8px 12px; }
+    .syncbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; }
+    .src { min-width: 0; padding: 8px; font-size: 12px; }
+    .src h3 { flex-direction: column; align-items: stretch; gap: 6px; font-size: 14px; }
+    .src h3 button { padding: 5px 6px; font-size: 13px; }
+    .src .detail.msg { display: none; }   /* errori e limiti API restano visibili */
+    .clist { padding: 6px 14px 30px; }
+    .cand { grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px; }
+    .cand img, .cand .ph { width: 52px; height: 52px; }
+    .cand .btns { grid-column: 1 / -1; justify-content: flex-end; }
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>🎮 Giochi completati</h1>
-  <button id="btnCovers" title="Abbina a IGDB i giochi senza copertina">Copertine mancanti</button>
-  <a href="/api/export.csv"><button>Esporta CSV</button></a>
-  <button class="primary" id="btnAdd">+ Aggiungi</button>
+  <button id="btnCovers" title="Abbina a IGDB i giochi senza copertina"><span class="lbl-long">Copertine mancanti</span><span class="lbl-short">🖼</span></button>
+  <a href="/api/export.csv" title="Esporta CSV"><button><span class="lbl-long">Esporta CSV</span><span class="lbl-short">CSV</span></button></a>
+  <button class="primary" id="btnAdd" title="Aggiungi un gioco">+<span class="lbl-long"> Aggiungi</span></button>
 </header>
 
 <nav class="tabs">
@@ -216,6 +254,7 @@ function render() {
   const ys = Object.keys(counts).sort(), max = Math.max(1, ...Object.values(counts));
   $('#years').innerHTML = ys.map(y => `<div data-y="${y}" class="${y === fy ? 'sel' : ''}" title="${y}: ${counts[y]}">
       <em>${counts[y]}</em><i style="height:${Math.max(4, counts[y] / max * 56)}px"></i><small>'${y.slice(2)}</small></div>`).join('');
+  $('#years').scrollLeft = $('#years').scrollWidth;
 
   $('#grid').innerHTML = list.map(g => {
     const name = g.igdb_name || g.title;
@@ -317,13 +356,13 @@ $('#igdbRes').addEventListener('click', async e => {
 
 $('#btnCovers').onclick = async () => {
   const b = $('#btnCovers');
-  b.disabled = true; b.textContent = 'Abbino…';
+  b.disabled = true; b.querySelector('.lbl-long').textContent = 'Abbino…';
   try {
     const r = await api('/api/covers/auto', {method: 'POST'});
     toast(`Abbinati ${r.matched}, da controllare ${r.doubtful}` + (r.not_found.length ? `, non trovati: ${r.not_found.join(', ')}` : ''), 8000);
     await load();
   } catch (err) { toast('Errore: ' + err.message, 5000); }
-  b.disabled = false; b.textContent = 'Copertine mancanti';
+  b.disabled = false; b.querySelector('.lbl-long').textContent = 'Copertine mancanti';
 };
 
 $('#grid').addEventListener('click', e => {
@@ -367,7 +406,7 @@ async function loadSync() {
     return `<div class="src"><h3>${SRC[k]}
         ${v.configured ? `<button data-sync="${k}" ${v.status === 'running' ? 'disabled' : ''}>${v.status === 'running' ? 'In corso…' : 'Sincronizza'}</button>` : ''}</h3>
       ${v.configured
-        ? `<div class="${cls}">${esc(v.message || '')}</div><div class="msg">${when}${v.total ? ` · ${v.total} giochi, ${v.new || 0} da valutare` : ''}</div>`
+        ? `<div class="detail ${cls}">${esc(v.message || '')}</div><div class="msg">${when}${v.total ? ` · ${v.total} giochi, ${v.new || 0} da valutare` : ''}</div>`
         : '<div class="msg">Non configurato: credenziali mancanti nel .env</div>'}</div>`;
   }).join('');
   $('#nCand').textContent = newCount ? `(${newCount})` : '';
