@@ -1,18 +1,23 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Giochi completati</title>
+<title>Roll Credits</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icon.svg">
+<meta name="theme-color" content="#14161b">
 <style>
   :root {
     --bg: #14161b; --panel: #1d2027; --panel2: #262a33; --line: #323743;
     --text: #e6e8ec; --muted: #9aa1ad; --accent: #7aa2ff; --good: #5fcf8a; --mid: #e6c35c; --bad: #e57373;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
   header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  h1 { font-size: 22px; margin: 0 auto 0 0; }
+  h1 { font-size: 22px; margin: 0 auto 0 0; display: flex; align-items: center; gap: 10px; }
+  h1 img { width: 30px; height: 30px; }
   button, select, input, textarea {
     font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
     border-radius: 8px; padding: 7px 11px;
@@ -21,6 +26,7 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #0d1220; font-weight: 600; }
   button.danger { color: var(--bad); }
   button:disabled { opacity: .5; cursor: default; }
+  a { color: var(--accent); }
   .stats { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 24px; }
   .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; min-width: 130px; }
   .tile b { display: block; font-size: 24px; }
@@ -54,9 +60,8 @@
   form.edit { padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   form.edit input:not([type=checkbox]), form.edit textarea { width: 100%; min-width: 0; }
   .lbl-short { display: none; }
-  form.edit label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  form.edit label, .set label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   form.edit .full { grid-column: 1 / -1; }
-  form.edit label.check { flex-direction: row; align-items: center; gap: 8px; }
   .actions { display: flex; gap: 8px; justify-content: flex-end; }
   .actions .left { margin-right: auto; }
   .igdb { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 12px; }
@@ -83,7 +88,67 @@
   .cand .sig { font-size: 13px; margin-top: 3px; }
   .cand .sig.none { color: var(--muted); }
   .cand .btns { display: flex; gap: 6px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; z-index: 20; max-width: 90vw; }
+
+  /* --- accesso --- */
+  .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; }
+  .login .brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 6px; text-align: center; }
+  .login .brand img { width: 72px; height: 72px; }
+  .login .brand b { font-size: 22px; }
+  .login .brand span { color: var(--muted); font-size: 13px; }
+  .login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .login .err { color: var(--bad); font-size: 13px; min-height: 1em; }
+
+  /* --- impostazioni --- */
+  .set { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+  .set h2 { margin: 0; font-size: 18px; }
+  .set section { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .set h3 { margin: 0; font-size: 15px; }
+  .set .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .set .row > label { flex: 1; min-width: 150px; }
+  .set .hint { color: var(--muted); font-size: 12px; }
+  .set .ok { color: var(--good); }
+  .set code { background: var(--panel2); border-radius: 4px; padding: 1px 5px; font-size: 12px; word-break: break-all; }
+  .users { display: flex; flex-direction: column; gap: 6px; }
+  .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .users div span { margin-right: auto; }
+
+  /* --- resoconto --- */
+  .rv { padding: 14px 24px 50px; display: flex; flex-direction: column; gap: 18px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { padding: 5px 12px; border-radius: 999px; font-size: 14px; }
+  .chips button.on { background: var(--accent); border-color: var(--accent); color: #0d1220; font-weight: 600; }
+  .rv-hero { background: linear-gradient(135deg, #24345f, #1a1e2a 70%); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .rv-hero h2 { margin: 0 0 4px; font-size: 26px; }
+  .rv-hero p { margin: 0; color: var(--muted); }
+  .rv-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .rv-tiles .tile b { font-size: 28px; }
+  .rv-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 12px; font-size: 15px; }
+  .vbars { display: flex; align-items: flex-end; gap: 2px; height: 150px; }
+  .vbars div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+  .vbars i { display: block; width: 72%; max-width: 30px; background: var(--accent); border-radius: 4px 4px 0 0; }
+  .vbars div:hover i { filter: brightness(1.2); }
+  .vbars em { font-style: normal; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .vbars small { font-size: 11px; color: var(--muted); margin-top: 4px; white-space: nowrap; border-top: 1px solid var(--line); width: 100%; text-align: center; padding-top: 3px; }
+  .hbars { display: flex; flex-direction: column; gap: 6px; }
+  .hbars div { display: grid; grid-template-columns: 90px 1fr 34px; gap: 8px; align-items: center; font-size: 13px; }
+  .hbars span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbars i { display: block; height: 14px; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 3px; }
+  .hbars b { font-weight: 600; text-align: right; }
+  .top { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+  .top .card { cursor: pointer; }
+  .top .rank { position: absolute; bottom: 6px; left: 6px; background: rgba(10,12,16,.85); border-radius: 6px; padding: 0 7px; font-weight: 700; font-size: 13px; }
+  .hl { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .hl .item { display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; cursor: pointer; }
+  .hl .item img, .hl .item .ph { width: 46px; height: 61px; object-fit: cover; border-radius: 5px; background: var(--panel2); flex: none; }
+  .hl .item small { color: var(--muted); display: block; font-size: 12px; }
+  .hl .item b { display: block; font-size: 14px; }
+  .hl .item span { color: var(--muted); font-size: 12px; }
+  .tip { position: fixed; pointer-events: none; background: #0d0f14; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; z-index: 30; max-width: 280px; display: none; }
+  .tip b { display: block; }
 
   /* --- telefono --- */
   @media (max-width: 640px) {
@@ -91,11 +156,12 @@
     input, select, textarea { font-size: 16px; }   /* sotto i 16px iOS zooma al tocco */
     header { padding: 12px 14px 6px; gap: 8px; flex-wrap: nowrap; }
     h1 { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    h1 img { width: 26px; height: 26px; }
     header button { padding: 6px 10px; }
     .lbl-long { display: none; }
     .lbl-short { display: inline; }
-    .tabs { padding: 0 8px; }
-    .tabs button { padding: 10px; }
+    .tabs { padding: 0 8px; overflow-x: auto; }
+    .tabs button { padding: 10px; white-space: nowrap; }
     .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 4px; }
     .tile { min-width: 0; padding: 8px 10px; }
     .tile b { font-size: 20px; }
@@ -108,7 +174,7 @@
     .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 6px 14px 30px; }
     .meta { padding: 6px 8px 8px; }
     dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100dvh - 16px); overflow-y: auto; }
-    form.edit { padding: 14px; gap: 10px; }
+    form.edit, .set { padding: 14px; gap: 10px; }
     .actions button { padding: 8px 12px; }
     .syncbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; }
     .src { min-width: 0; padding: 8px; font-size: 12px; }
@@ -119,136 +185,432 @@
     .cand { grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px; }
     .cand img, .cand .ph { width: 52px; height: 52px; }
     .cand .btns { grid-column: 1 / -1; justify-content: flex-end; }
+    .rv { padding: 12px 14px 40px; gap: 14px; }
+    .rv-hero { padding: 16px; }
+    .rv-hero h2 { font-size: 21px; }
+    .rv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .rv-row { grid-template-columns: minmax(0, 1fr); }
+    .vbars { height: 120px; }
+    .vbars small { font-size: 10px; }
+    .top { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   }
 </style>
 </head>
 <body>
+<!-- sfumatura platino della coppa, definita una volta in un elemento sempre visibile -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#f4f6f8"/><stop offset=".5" stop-color="#b9c4ce"/><stop offset="1" stop-color="#eef1f4"/></linearGradient></defs></svg>
+
+<!-- accesso / primo avvio -->
+<div class="login" id="loginView" hidden>
+  <form id="loginForm">
+    <div class="brand"><img src="/static/icon.svg" alt=""><b>Roll Credits</b><span data-i18n="tagline"></span></div>
+    <div id="setupNote" class="hint" hidden style="color:var(--muted);font-size:13px" data-i18n="setup_note"></div>
+    <label><span data-i18n="username"></span><input name="username" autocomplete="username" required maxlength="40"></label>
+    <label><span data-i18n="password"></span><input name="password" type="password" autocomplete="current-password" required></label>
+    <label id="pw2Lbl" hidden><span data-i18n="password_repeat"></span><input name="password2" type="password" autocomplete="new-password"></label>
+    <label><span data-i18n="language"></span><select name="lang" id="loginLang"><option value="en">English</option><option value="it">Italiano</option></select></label>
+    <div class="err" id="loginErr"></div>
+    <button class="primary" type="submit" id="loginBtn"></button>
+  </form>
+</div>
+
+<div id="appView" hidden>
 <header>
-  <h1>🎮 Giochi completati</h1>
-  <button id="btnCovers" title="Abbina a IGDB i giochi senza copertina"><span class="lbl-long">Copertine mancanti</span><span class="lbl-short">🖼</span></button>
-  <a href="/api/export.csv" title="Esporta CSV"><button><span class="lbl-long">Esporta CSV</span><span class="lbl-short">CSV</span></button></a>
-  <button class="primary" id="btnAdd" title="Aggiungi un gioco">+<span class="lbl-long"> Aggiungi</span></button>
+  <h1><img src="/static/icon.svg" alt="">Roll Credits</h1>
+  <button id="btnCovers" data-i18n-title="covers_title"><span class="lbl-long" data-i18n="covers_btn"></span><span class="lbl-short">🖼</span></button>
+  <a href="/api/export.csv" data-i18n-title="export_title"><button><span class="lbl-long" data-i18n="export_btn"></span><span class="lbl-short">CSV</span></button></a>
+  <button class="primary" id="btnAdd" data-i18n-title="add_title">+<span class="lbl-long" data-i18n="add_btn"></span></button>
+  <button id="btnSettings" data-i18n-title="settings">⚙</button>
 </header>
 
 <nav class="tabs">
-  <button id="tabReg" class="on">Registro</button>
-  <button id="tabCand">Dalle piattaforme <span id="nCand"></span></button>
+  <button id="tabReg" class="on" data-i18n="tab_log"></button>
+  <button id="tabRv" data-i18n="tab_review"></button>
+  <button id="tabCand"><span data-i18n="tab_platforms"></span> <span id="nCand"></span></button>
 </nav>
 
 <div id="regView">
 <section class="stats">
-  <div class="tile"><b id="stTot">–</b><span>completati</span></div>
-  <div class="tile"><b id="stYear">–</b><span id="stYearLbl">quest'anno</span></div>
-  <div class="tile"><b id="stAvg">–</b><span>voto medio</span></div>
-  <div class="tile years" id="years" title="Clic su un anno per filtrare"></div>
+  <div class="tile"><b id="stTot">–</b><span data-i18n="completed"></span></div>
+  <div class="tile"><b id="stYear">–</b><span id="stYearLbl"></span></div>
+  <div class="tile"><b id="stAvg">–</b><span data-i18n="avg_rating"></span></div>
+  <div class="tile years" id="years" data-i18n-title="years_title"></div>
 </section>
 
 <section class="filters">
-  <input type="search" id="q" placeholder="Cerca titolo…">
-  <select id="fYear"><option value="">Tutti gli anni</option></select>
-  <select id="fPlat"><option value="">Tutte le piattaforme</option></select>
+  <input type="search" id="q" data-i18n-ph="search">
+  <select id="fYear"><option value="" data-i18n="all_years"></option></select>
+  <select id="fPlat"><option value="" data-i18n="all_platforms"></option></select>
   <select id="fVoto">
-    <option value="">Tutti i voti</option>
-    <option value="9">Da 9 in su</option>
-    <option value="8">Da 8 in su</option>
-    <option value="7">Da 7 in su</option>
-    <option value="6">Da 6 in su</option>
-    <option value="low">Sotto il 6</option>
-    <option value="none">Senza voto</option>
+    <option value="" data-i18n="all_ratings"></option>
+    <option value="9" data-i18n="r9"></option>
+    <option value="8" data-i18n="r8"></option>
+    <option value="7" data-i18n="r7"></option>
+    <option value="6" data-i18n="r6"></option>
+    <option value="low" data-i18n="rlow"></option>
+    <option value="none" data-i18n="rnone"></option>
   </select>
   <select id="sort">
-    <option value="date">Più recenti</option>
-    <option value="rating">Voto</option>
-    <option value="title">Titolo</option>
-    <option value="hours">Ore giocate</option>
+    <option value="date" data-i18n="sort_date"></option>
+    <option value="rating" data-i18n="sort_rating"></option>
+    <option value="title" data-i18n="sort_title"></option>
+    <option value="hours" data-i18n="sort_hours"></option>
   </select>
-  <label style="display:flex;align-items:center;gap:6px;color:var(--muted)" title="Copertina mancante o abbinamento automatico incerto">
-    <input type="checkbox" id="fCheck"> Da controllare <span id="nCheck"></span></label>
+  <label style="display:flex;align-items:center;gap:6px;color:var(--muted)" data-i18n-title="check_title">
+    <input type="checkbox" id="fCheck"> <span data-i18n="check"></span> <span id="nCheck"></span></label>
 </section>
 
 <main class="grid" id="grid"></main>
-<div class="empty" id="empty" hidden>Nessun gioco.</div>
+<div class="empty" id="empty" hidden data-i18n="no_games"></div>
+</div>
+
+<div id="rvView" hidden>
+  <div class="rv" id="rv"></div>
 </div>
 
 <div id="candView" hidden>
   <section class="syncbar" id="syncbar"></section>
   <section class="filters">
-    <input type="search" id="cq" placeholder="Cerca titolo…">
+    <input type="search" id="cq" data-i18n-ph="search">
     <select id="cStatus">
-      <option value="new">Da valutare</option>
-      <option value="dismissed">Non completati</option>
-      <option value="confirmed">Già nel registro</option>
+      <option value="new" data-i18n="c_new"></option>
+      <option value="dismissed" data-i18n="c_dismissed"></option>
+      <option value="confirmed" data-i18n="c_confirmed"></option>
     </select>
-    <select id="cSrc"><option value="">Tutte le fonti</option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option></select>
-    <select id="cSig" title="Quanto è probabile che il gioco sia stato finito">
-      <option value="strong">Indizio forte (fine storia, platino, 100%)</option>
-      <option value="any">Anche solo ultimo achievement</option>
-      <option value="">Tutti i giochi avviati</option>
+    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option></select>
+    <select id="cSig" data-i18n-title="sig_title">
+      <option value="strong" data-i18n="sig_strong"></option>
+      <option value="any" data-i18n="sig_any"></option>
+      <option value="" data-i18n="sig_all"></option>
     </select>
   </section>
   <div class="clist" id="clist"></div>
-  <div class="empty" id="cempty" hidden>Niente da mostrare.</div>
+  <div class="empty" id="cempty" hidden data-i18n="nothing"></div>
+</div>
 </div>
 
 <dialog id="dlg">
   <form class="edit" id="form" method="dialog">
-    <label class="full">Titolo <input name="title" required maxlength="300"></label>
-    <label>Piattaforma <input name="platform" required list="platList" maxlength="50"></label>
-    <label>Completato il <input name="completed_on" type="date"></label>
-    <label>Voto (0–10) <input name="rating" type="number" min="0" max="10" step="0.5"></label>
-    <label>Ore giocate <input name="hours" type="number" min="0" step="0.1"></label>
+    <label class="full"><span data-i18n="f_title"></span> <input name="title" required maxlength="300"></label>
+    <label><span data-i18n="f_platform"></span> <input name="platform" required list="platList" maxlength="50"></label>
+    <label><span data-i18n="f_completed"></span> <input name="completed_on" type="date"></label>
+    <label><span data-i18n="f_rating"></span> <input name="rating" type="number" min="0" max="10" step="0.5"></label>
+    <label><span data-i18n="f_hours"></span> <input name="hours" type="number" min="0" step="0.1"></label>
     <div class="full" id="platInfo" style="font-size:13px;color:var(--muted)"></div>
-    <label class="full">Note <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
+    <label class="full"><span data-i18n="f_notes"></span> <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
     <div class="igdb" id="igdbBox">
       <div class="cur" id="igdbCur"></div>
       <div style="display:flex; gap:8px">
-        <input id="igdbQ" placeholder="Cerca su IGDB per cambiare copertina…" style="flex:1">
-        <button type="button" id="igdbGo">Cerca</button>
+        <input id="igdbQ" data-i18n-ph="igdb_ph" style="flex:1">
+        <button type="button" id="igdbGo" data-i18n="search_btn"></button>
       </div>
       <div class="results" id="igdbRes"></div>
     </div>
     <div class="actions full">
-      <button type="button" class="danger left" id="btnDel">Elimina</button>
-      <button type="button" id="btnCancel">Annulla</button>
-      <button type="submit" class="primary">Salva</button>
+      <button type="button" class="danger left" id="btnDel" data-i18n="delete"></button>
+      <button type="button" id="btnCancel" data-i18n="cancel"></button>
+      <button type="submit" class="primary" data-i18n="save"></button>
     </div>
   </form>
 </dialog>
+
+<dialog id="setDlg">
+  <div class="set">
+    <div class="actions" style="justify-content:space-between;align-items:center"><h2 data-i18n="settings"></h2>
+      <button type="button" id="setClose">✕</button></div>
+
+    <section>
+      <h3 data-i18n="s_general"></h3>
+      <div class="row">
+        <label><span data-i18n="language"></span><select id="setLang"><option value="en">English</option><option value="it">Italiano</option></select></label>
+        <button type="button" id="btnLogout" data-i18n="logout"></button>
+      </div>
+      <div class="hint" id="setWho"></div>
+    </section>
+
+    <section>
+      <h3 data-i18n="s_password"></h3>
+      <form class="row" id="pwForm">
+        <label><span data-i18n="pw_old"></span><input name="old" type="password" autocomplete="current-password" required></label>
+        <label><span data-i18n="pw_new"></span><input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button type="submit" data-i18n="change"></button>
+      </form>
+    </section>
+
+    <section>
+      <h3 data-i18n="s_platforms"></h3>
+      <div class="hint" data-i18n="s_platforms_hint"></div>
+      <form id="credForm" style="display:flex;flex-direction:column;gap:10px">
+        <label><span>Steam ID <span class="cst" data-k="steam_id"></span></span><input name="steam_id" autocomplete="off"></label>
+        <div class="hint" data-i18n-html="h_steam_id"></div>
+        <label id="steamKeyLbl"><span>Steam Web API key <span class="cst" data-k="steam_key"></span></span><input name="steam_key" type="password" autocomplete="off"></label>
+        <div class="hint" data-i18n-html="h_steam_key"></div>
+        <label><span>OpenXBL API key (Xbox) <span class="cst" data-k="xbl_key"></span></span><input name="xbl_key" type="password" autocomplete="off"></label>
+        <div class="hint" data-i18n-html="h_xbl"></div>
+        <label><span>PlayStation NPSSO <span class="cst" data-k="psn_npsso"></span></span><input name="psn_npsso" type="password" autocomplete="off"></label>
+        <div class="hint" data-i18n-html="h_psn"></div>
+        <div class="actions"><button type="submit" class="primary" data-i18n="save"></button></div>
+      </form>
+    </section>
+
+    <section>
+      <h3 data-i18n="s_homepage"></h3>
+      <div class="hint" data-i18n-html="h_homepage"></div>
+      <div class="row"><button type="button" id="btnToken"></button><button type="button" id="btnTokenDel" class="danger" data-i18n="revoke"></button></div>
+      <div id="tokenOut" class="hint" hidden></div>
+    </section>
+
+    <section id="usersSec" hidden>
+      <h3 data-i18n="s_users"></h3>
+      <div class="users" id="usersList"></div>
+      <form class="row" id="userForm">
+        <label><span data-i18n="username"></span><input name="username" required maxlength="40" pattern="[\w.\-]+"></label>
+        <label><span data-i18n="pw_initial"></span><input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
+        <label style="flex:0 0 auto;flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="is_admin"> admin</label>
+        <button type="submit" data-i18n="add_user"></button>
+      </form>
+    </section>
+  </div>
+</dialog>
+
 <datalist id="platList"></datalist>
 <div class="toast" id="toast"></div>
+<div class="tip" id="tip"></div>
 
 <script>
 const $ = s => document.querySelector(s);
-let games = [], cfg = {igdb: false}, editing = null;
+const $$ = s => [...document.querySelectorAll(s)];
+let games = [], cfg = {igdb: false}, me = null, editing = null;
+let lang = localStorage.getItem('rc_lang') || 'en';
+
+// --- testi ------------------------------------------------------------------------
+const I18N = {
+  en: {
+    tagline: 'Every game you finished, in one place', setup_note: 'First start: create the administrator account. Games and platform keys already in the app will be assigned to it.',
+    username: 'Username', password: 'Password', password_repeat: 'Repeat password', language: 'Language',
+    login: 'Sign in', create_admin: 'Create account', pw_mismatch: 'The passwords do not match', pw_short: 'At least 8 characters',
+    covers_btn: 'Missing covers', covers_title: 'Match games without a cover on IGDB', export_btn: 'Export CSV', export_title: 'Export CSV',
+    add_btn: ' Add', add_title: 'Add a game', settings: 'Settings',
+    tab_log: 'Log', tab_review: 'Year in review', tab_platforms: 'From platforms',
+    completed: 'completed', avg_rating: 'average rating', in_year: 'in {y}', years_title: 'Click a year to filter',
+    search: 'Search title…', all_years: 'All years', all_platforms: 'All platforms', all_ratings: 'All ratings',
+    r9: '9 and up', r8: '8 and up', r7: '7 and up', r6: '6 and up', rlow: 'Below 6', rnone: 'Not rated',
+    sort_date: 'Most recent', sort_rating: 'Rating', sort_title: 'Title', sort_hours: 'Hours played',
+    check: 'To check', check_title: 'Missing cover or uncertain automatic match', no_games: 'No games.',
+    date_unknown: 'date ?', all_ach: 'All achievements ({d}/{t})', check_badge: 'IGDB match to check: open the card',
+    c_new: 'To review', c_dismissed: 'Not completed', c_confirmed: 'Already in the log', all_sources: 'All sources',
+    sig_title: 'How likely it is that the game was finished', sig_strong: 'Strong hint (story end, platinum, 100%)',
+    sig_any: 'Also just the last achievement', sig_all: 'All games started', nothing: 'Nothing to show.',
+    f_title: 'Title', f_platform: 'Platform', f_completed: 'Completed on', f_rating: 'Rating (0–10)', f_hours: 'Hours played', f_notes: 'Notes',
+    igdb_ph: 'Search IGDB to change the cover…', search_btn: 'Search', delete: 'Delete', cancel: 'Cancel', save: 'Save',
+    from_plat: 'From the platform ({s}): {h}', no_hours: 'hours not available', ach_n: '{d}/{t} achievements',
+    manual_wins: ' — hours entered here take precedence', igdb_matched: 'Matched on IGDB:', manual_pick: '· picked by hand',
+    to_check: '· <b style="color:var(--mid)">to check</b>: if it is right, click it below to confirm', automatic: '· automatic',
+    not_matched: 'Not matched on IGDB yet.', added_log: 'Added to the log', confirm_delete: 'Delete "{t}"?',
+    searching: 'Searching…', no_results: 'No results.', cover_updated: 'Cover updated', matching: 'Matching…',
+    covers_done: 'Matched {m}, to check {d}', not_found: ', not found: {l}', error: 'Error: ',
+    sync_btn: 'Sync', sync_running: 'Running…', last_ok: 'last success {w}', never: 'never synced',
+    games_new: ' · {t} games, {n} to review', not_set: 'Not set up: add your account in ⚙ Settings',
+    sig_story: '🏁 Story end', sig_platinum: '🏆 Platinum', sig_100: '💯 All achievements', sig_last: '🕒 Last achievement',
+    weak: '(weak hint)', no_signal: 'No ending hint', no_ach: 'no achievements', last_played: ' · last played {d}',
+    btn_done: 'Completed', btn_notdone: 'Not completed', btn_restore: 'Restore', load_err: 'Loading error: ',
+    s_general: 'General', logout: 'Sign out', signed_as: 'Signed in as {u}{a}', admin_tag: ' (admin)',
+    s_password: 'Password', pw_old: 'Current password', pw_new: 'New password (8+ characters)', change: 'Change',
+    pw_changed: 'Password changed. Other devices have been signed out.',
+    s_platforms: 'Platform accounts',
+    s_platforms_hint: 'Fill in only the ones you use. Saved keys are never shown again: leave a field empty to keep it, type a single space to remove it.',
+    is_set: '✓ set', h_steam_id: 'SteamID64 (17 digits) or your custom profile name. Profile and "Game details" must be <b>public</b>.',
+    h_steam_key: 'Optional: the server already has a shared key. Otherwise get one at <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener">steamcommunity.com/dev/apikey</a>.',
+    h_xbl: 'Sign in at <a href="https://xbl.io" target="_blank" rel="noopener">xbl.io</a> with your Microsoft account, then "API Keys". Free plan: 150 requests/hour, the first full sync can take a few hours.',
+    h_psn: 'Sign in at playstation.com, then open <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener">this page</a> and copy the value of <code>npsso</code> (64 characters). It lasts about 2 months.',
+    creds_saved: 'Saved. Syncing…',
+    s_homepage: 'Homepage widget', h_homepage: 'A read-only token for <code>/api/stats</code> (completed this year, total, to review). Generating a new one replaces the old one.',
+    token_new: 'Generate token', token_regen: 'Generate a new token', revoke: 'Revoke', token_once: 'Copy it now, it will not be shown again:',
+    token_revoked: 'Token revoked',
+    s_users: 'Users', pw_initial: 'Initial password', add_user: 'Add', games_n: '{n} games', reset_pw: 'Reset password',
+    reset_prompt: 'New password for {u} (8+ characters):', del_user: 'Delete', del_user_confirm: 'Delete {u} together with their log ({n} games)? This cannot be undone.',
+    user_added: 'User added', you: 'you',
+    rv_all: 'All time', rv_title_year: 'Your {y} in games', rv_title_all: 'All your games',
+    rv_sub: '{n} games finished · {h} hours played', rv_none: 'No games completed in this period.',
+    rv_games: 'games finished', rv_hours: 'hours played', rv_avg: 'average rating', rv_plat: 'platinum (all achievements)',
+    rv_best_month: 'busiest month', rv_best_year: 'best year', rv_month_chart: 'Games finished per month', rv_year_chart: 'Games finished per year',
+    rv_platforms: 'Platforms', rv_ratings: 'Ratings', rv_top: 'Top rated', rv_highlights: 'Highlights',
+    hl_longest: 'Longest', hl_shortest: 'Quickest', hl_first: 'First finished', hl_last: 'Latest finished',
+    hl_oldest: 'Oldest release', hl_newest: 'Newest release', released: 'released {y}', hours_on: 'hours known for {n} of {t} games',
+    bar_tip: '{n} games', and_more: '… and {n} more',
+    err: {auth_required: 'Please sign in again', bad_login: 'Wrong username or password', too_many: 'Too many attempts: try again in 15 minutes',
+      setup_done: 'Setup already done: sign in', user_exists: 'This username already exists', bad_password: 'The current password is wrong',
+      admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
+      not_configured: 'Set up the account in Settings first'},
+    sync: {steam_ok: '{n} games in library, {f} updated', xbox_ok: '{n} titles, {f} updated', psn_ok: '{n} games with trophies, {f} updated',
+      rate_steam: 'Steam: too many requests, resumes in an hour', rate_xbox: 'OpenXBL: hourly limit reached, resumes in an hour',
+      rate_psn: 'PSN: too many requests, resumes in an hour', steam_badkey: 'Steam: the API key is not valid',
+      steam_noid: 'Steam ID "{id}" not found (use the SteamID64 or profile name)', steam_private: 'Steam does not return the library: profile and "Game details" must be public',
+      xbox_badkey: 'OpenXBL: the API key is not valid', psn_expired: 'PSN: NPSSO expired or not valid, generate a new one in Settings',
+      restart: 'interrupted by a restart', running: 'running…'},
+    months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], locale: 'en-GB',
+  },
+  it: {
+    tagline: 'Tutti i giochi che hai finito, in un posto solo', setup_note: "Primo avvio: crea l'account amministratore. I giochi e le chiavi delle piattaforme già presenti nell'app saranno suoi.",
+    username: 'Nome utente', password: 'Password', password_repeat: 'Ripeti la password', language: 'Lingua',
+    login: 'Accedi', create_admin: 'Crea account', pw_mismatch: 'Le password non coincidono', pw_short: 'Almeno 8 caratteri',
+    covers_btn: 'Copertine mancanti', covers_title: 'Abbina a IGDB i giochi senza copertina', export_btn: 'Esporta CSV', export_title: 'Esporta CSV',
+    add_btn: ' Aggiungi', add_title: 'Aggiungi un gioco', settings: 'Impostazioni',
+    tab_log: 'Registro', tab_review: "Il tuo anno", tab_platforms: 'Dalle piattaforme',
+    completed: 'completati', avg_rating: 'voto medio', in_year: 'nel {y}', years_title: 'Clic su un anno per filtrare',
+    search: 'Cerca titolo…', all_years: 'Tutti gli anni', all_platforms: 'Tutte le piattaforme', all_ratings: 'Tutti i voti',
+    r9: 'Da 9 in su', r8: 'Da 8 in su', r7: 'Da 7 in su', r6: 'Da 6 in su', rlow: 'Sotto il 6', rnone: 'Senza voto',
+    sort_date: 'Più recenti', sort_rating: 'Voto', sort_title: 'Titolo', sort_hours: 'Ore giocate',
+    check: 'Da controllare', check_title: 'Copertina mancante o abbinamento automatico incerto', no_games: 'Nessun gioco.',
+    date_unknown: 'data ?', all_ach: 'Tutti gli achievement ({d}/{t})', check_badge: 'Abbinamento IGDB da controllare: apri la scheda',
+    c_new: 'Da valutare', c_dismissed: 'Non completati', c_confirmed: 'Già nel registro', all_sources: 'Tutte le fonti',
+    sig_title: 'Quanto è probabile che il gioco sia stato finito', sig_strong: 'Indizio forte (fine storia, platino, 100%)',
+    sig_any: 'Anche solo ultimo achievement', sig_all: 'Tutti i giochi avviati', nothing: 'Niente da mostrare.',
+    f_title: 'Titolo', f_platform: 'Piattaforma', f_completed: 'Completato il', f_rating: 'Voto (0–10)', f_hours: 'Ore giocate', f_notes: 'Note',
+    igdb_ph: 'Cerca su IGDB per cambiare copertina…', search_btn: 'Cerca', delete: 'Elimina', cancel: 'Annulla', save: 'Salva',
+    from_plat: 'Dalla piattaforma ({s}): {h}', no_hours: 'ore non disponibili', ach_n: '{d}/{t} achievement',
+    manual_wins: ' — le ore scritte qui hanno la precedenza', igdb_matched: 'Abbinato a IGDB:', manual_pick: '· scelto a mano',
+    to_check: '· <b style="color:var(--mid)">da controllare</b>: se è giusto, cliccalo qui sotto per confermarlo', automatic: '· automatico',
+    not_matched: 'Non ancora abbinato a IGDB.', added_log: 'Aggiunto al registro', confirm_delete: 'Eliminare "{t}"?',
+    searching: 'Cerco…', no_results: 'Nessun risultato.', cover_updated: 'Copertina aggiornata', matching: 'Abbino…',
+    covers_done: 'Abbinati {m}, da controllare {d}', not_found: ', non trovati: {l}', error: 'Errore: ',
+    sync_btn: 'Sincronizza', sync_running: 'In corso…', last_ok: 'ultima riuscita {w}', never: 'mai sincronizzato',
+    games_new: ' · {t} giochi, {n} da valutare', not_set: 'Non configurato: aggiungi il tuo account in ⚙ Impostazioni',
+    sig_story: '🏁 Fine storia', sig_platinum: '🏆 Platino', sig_100: '💯 Tutti gli achievement', sig_last: '🕒 Ultimo achievement',
+    weak: '(indizio debole)', no_signal: 'Nessun indizio di fine', no_ach: 'nessun achievement', last_played: ' · ultimo avvio {d}',
+    btn_done: 'Completato', btn_notdone: 'Non completato', btn_restore: 'Ripristina', load_err: 'Errore nel caricamento: ',
+    s_general: 'Generale', logout: 'Esci', signed_as: 'Accesso come {u}{a}', admin_tag: ' (admin)',
+    s_password: 'Password', pw_old: 'Password attuale', pw_new: 'Nuova password (almeno 8 caratteri)', change: 'Cambia',
+    pw_changed: 'Password cambiata. Gli altri dispositivi sono stati disconnessi.',
+    s_platforms: 'Account delle piattaforme',
+    s_platforms_hint: 'Compila solo quelle che usi. Le chiavi salvate non vengono più mostrate: lascia vuoto per tenerle, scrivi uno spazio per toglierle.',
+    is_set: '✓ impostato', h_steam_id: 'SteamID64 (17 cifre) o il nome personalizzato del profilo. Profilo e "Dettagli di gioco" devono essere <b>pubblici</b>.',
+    h_steam_key: 'Facoltativa: il server ha già una chiave comune. Altrimenti si crea su <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener">steamcommunity.com/dev/apikey</a>.',
+    h_xbl: 'Accedi su <a href="https://xbl.io" target="_blank" rel="noopener">xbl.io</a> con l\'account Microsoft, poi "API Keys". Piano gratuito: 150 richieste/ora, la prima sincronizzazione completa può richiedere qualche ora.',
+    h_psn: 'Accedi su playstation.com, poi apri <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener">questa pagina</a> e copia il valore di <code>npsso</code> (64 caratteri). Dura circa 2 mesi.',
+    creds_saved: 'Salvato. Sincronizzo…',
+    s_homepage: 'Widget di Homepage', h_homepage: 'Token in sola lettura per <code>/api/stats</code> (completati quest\'anno, totale, da valutare). Generarne uno nuovo sostituisce il vecchio.',
+    token_new: 'Genera token', token_regen: 'Genera un nuovo token', revoke: 'Revoca', token_once: 'Copialo ora, non verrà più mostrato:',
+    token_revoked: 'Token revocato',
+    s_users: 'Utenti', pw_initial: 'Password iniziale', add_user: 'Aggiungi', games_n: '{n} giochi', reset_pw: 'Reimposta password',
+    reset_prompt: 'Nuova password per {u} (almeno 8 caratteri):', del_user: 'Elimina', del_user_confirm: 'Eliminare {u} insieme al suo registro ({n} giochi)? Non si può annullare.',
+    user_added: 'Utente aggiunto', you: 'tu',
+    rv_all: 'Sempre', rv_title_year: 'Il tuo {y} in giochi', rv_title_all: 'Tutti i tuoi giochi',
+    rv_sub: '{n} giochi finiti · {h} ore giocate', rv_none: 'Nessun gioco completato in questo periodo.',
+    rv_games: 'giochi finiti', rv_hours: 'ore giocate', rv_avg: 'voto medio', rv_plat: 'platino (tutti gli achievement)',
+    rv_best_month: 'mese più intenso', rv_best_year: 'anno migliore', rv_month_chart: 'Giochi finiti per mese', rv_year_chart: 'Giochi finiti per anno',
+    rv_platforms: 'Piattaforme', rv_ratings: 'Voti', rv_top: 'I più votati', rv_highlights: 'In evidenza',
+    hl_longest: 'Il più lungo', hl_shortest: 'Il più breve', hl_first: 'Il primo finito', hl_last: "L'ultimo finito",
+    hl_oldest: 'Uscito da più tempo', hl_newest: 'Il più recente', released: 'uscito nel {y}', hours_on: 'ore note per {n} giochi su {t}',
+    bar_tip: '{n} giochi', and_more: '… e altri {n}',
+    err: {auth_required: 'Accedi di nuovo', bad_login: 'Nome utente o password sbagliati', too_many: 'Troppi tentativi: riprova tra 15 minuti',
+      setup_done: 'Configurazione già fatta: accedi', user_exists: 'Questo nome utente esiste già', bad_password: 'La password attuale è sbagliata',
+      admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
+      not_configured: "Configura prima l'account nelle Impostazioni"},
+    sync: {steam_ok: '{n} giochi in libreria, {f} aggiornati', xbox_ok: '{n} titoli, {f} aggiornati', psn_ok: '{n} giochi con trofei, {f} aggiornati',
+      rate_steam: "Steam: troppe richieste, riprende tra un'ora", rate_xbox: "OpenXBL: limite orario raggiunto, riprende tra un'ora",
+      rate_psn: "PSN: troppe richieste, riprende tra un'ora", steam_badkey: 'Steam: la chiave API non è valida',
+      steam_noid: 'Steam ID "{id}" non trovato (serve lo SteamID64 o il nome del profilo)', steam_private: "Steam non restituisce la libreria: profilo e 'Dettagli di gioco' devono essere pubblici",
+      xbox_badkey: 'OpenXBL: la chiave API non è valida', psn_expired: 'PSN: NPSSO scaduto o non valido, rigeneralo nelle Impostazioni',
+      restart: 'interrotta dal riavvio', running: 'in corso…'},
+    months: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'], locale: 'it-IT',
+  },
+};
+const fill = (s, p = {}) => String(s).replace(/\{(\w+)\}/g, (_, k) => p[k] ?? '');
+const t = (k, p) => fill(I18N[lang][k] ?? I18N.en[k] ?? k, p);
+const tErr = m => I18N[lang].err[m] || m;
+const tSync = m => {
+  if (!m) return '';
+  try { const j = JSON.parse(m); return j.k === 'raw' ? j.p.text : fill(I18N[lang].sync[j.k] || j.k, j.p); } catch { return m; }
+};
+function applyI18n() {
+  document.documentElement.lang = lang;
+  $$('[data-i18n]').forEach(e => e.textContent = t(e.dataset.i18n));
+  $$('[data-i18n-html]').forEach(e => e.innerHTML = t(e.dataset.i18nHtml));
+  $$('[data-i18n-ph]').forEach(e => e.placeholder = t(e.dataset.i18nPh));
+  $$('[data-i18n-title]').forEach(e => e.title = t(e.dataset.i18nTitle));
+}
 
 const api = async (url, opts = {}) => {
   const r = await fetch(url, {headers: {'Content-Type': 'application/json'}, ...opts});
   if (!r.ok) {
     let msg = r.statusText;
     try { const j = await r.json(); msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
-    throw new Error(msg);
+    if (r.status === 401 && !url.startsWith('/api/auth/')) { showLogin(false); }
+    throw new Error(tErr(msg));
   }
   return r.status === 204 ? null : r.json();
 };
-const toast = (msg, ms = 3000) => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms); };
+const toast = (msg, ms = 3000) => { const e = $('#toast'); e.textContent = msg; e.style.display = 'block'; clearTimeout(e._h); e._h = setTimeout(() => e.style.display = 'none', ms); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const year = g => g.completed_on ? g.completed_on.slice(0, 4) : '';
-const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString('it-IT', {day: 'numeric', month: 'short', year: 'numeric'}) : 'data ?';
+const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString(t('locale'), {day: 'numeric', month: 'short', year: 'numeric'}) : t('date_unknown');
 const scoreColor = v => v >= 8.5 ? 'var(--good)' : v >= 6.5 ? 'var(--mid)' : 'var(--bad)';
 const doubtful = g => !g.igdb_id || !g.cover || (!g.match_manual && g.match_score != null && g.match_score < 0.85);
 const fmtHours = h => h == null ? '' : h >= 10 ? `${Math.round(h)} h` : `${Number(h).toFixed(1).replace('.0', '')} h`;
 const playLine = g => [g.hours != null ? `⏱ ${fmtHours(g.hours)}` : '', g.ach_total ? `🏆 ${g.ach_done}/${g.ach_total}` : '']
   .filter(Boolean).join(' · ');
 const full = g => g.ach_total > 0 && g.ach_done >= g.ach_total;
+const coverUrl = g => g.cover ? `/covers/${encodeURIComponent(g.cover)}` : '';
 // coppa con sfumatura platino (non l'emoji, che è dorata)
-const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
-  <stop offset="0" stop-color="#f4f6f8"/><stop offset=".5" stop-color="#b9c4ce"/><stop offset="1" stop-color="#eef1f4"/></linearGradient></defs>
-  <path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
+const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
+const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
 
+// --- accesso -----------------------------------------------------------------------
+let setupMode = false;
+function showLogin(setup) {
+  setupMode = setup;
+  $('#appView').hidden = true;
+  $('#loginView').hidden = false;
+  $$('dialog[open]').forEach(d => d.close());
+  $('#setupNote').hidden = $('#pw2Lbl').hidden = !setup;
+  $('#loginForm').password.autocomplete = setup ? 'new-password' : 'current-password';
+  $('#loginLang').value = lang;
+  $('#loginBtn').textContent = t(setup ? 'create_admin' : 'login');
+  $('#loginErr').textContent = '';
+  applyI18n();
+  $('#loginBtn').textContent = t(setup ? 'create_admin' : 'login');
+}
+$('#loginLang').addEventListener('input', e => { lang = e.target.value; localStorage.setItem('rc_lang', lang); showLogin(setupMode); });
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  $('#loginErr').textContent = '';
+  try {
+    if (setupMode) {
+      if (f.password.value.length < 8) throw new Error(t('pw_short'));
+      if (f.password.value !== f.password2.value) throw new Error(t('pw_mismatch'));
+      await api('/api/auth/setup', {method: 'POST', body: JSON.stringify({username: f.username.value, password: f.password.value, lang})});
+    } else {
+      await api('/api/auth/login', {method: 'POST', body: JSON.stringify({username: f.username.value, password: f.password.value})});
+    }
+    f.reset();
+    await boot();
+  } catch (err) { $('#loginErr').textContent = err.message; }
+});
+
+async function boot() {
+  const st = await api('/api/auth/state');
+  if (!st.user) return showLogin(st.setup);
+  me = st.user;
+  lang = me.lang;
+  localStorage.setItem('rc_lang', lang);
+  $('#loginView').hidden = true;
+  $('#appView').hidden = false;
+  applyI18n();
+  await load();
+  const s = await api('/api/sync');
+  const n = Object.values(s).reduce((a, v) => a + (v.strong || 0), 0);
+  $('#nCand').textContent = n ? `(${n})` : '';
+}
+
+// --- registro ----------------------------------------------------------------------
 async function load() {
   [games, cfg] = await Promise.all([api('/api/games'), api('/api/config')]);
-  $('#btnCovers').hidden = !cfg.igdb;
+  me = cfg.user;
+  $('#btnCovers').hidden = !cfg.igdb || tab !== 'reg';
   const years = [...new Set(games.map(year).filter(Boolean))].sort().reverse();
   const plats = [...new Set(games.map(g => g.platform))].sort();
   const keep = (sel, vals) => { const v = sel.value; sel.length = 1; vals.forEach(x => sel.add(new Option(x, x))); sel.value = vals.includes(v) ? v : ''; };
@@ -256,6 +618,7 @@ async function load() {
   keep($('#fPlat'), plats);
   $('#platList').innerHTML = plats.map(p => `<option value="${esc(p)}">`).join('');
   render();
+  if (tab === 'rv') renderReview();
 }
 
 function render() {
@@ -274,7 +637,7 @@ function render() {
   const thisYear = String(new Date().getFullYear());
   $('#stTot').textContent = list.length;
   $('#stYear').textContent = games.filter(g => year(g) === thisYear).length;
-  $('#stYearLbl').textContent = `nel ${thisYear}`;
+  $('#stYearLbl').textContent = t('in_year', {y: thisYear});
   $('#stAvg').textContent = avg(list);
   const counts = {};
   games.forEach(g => { const y = year(g); if (y) counts[y] = (counts[y] || 0) + 1; });
@@ -283,20 +646,21 @@ function render() {
       <em>${counts[y]}</em><i style="height:${Math.max(4, counts[y] / max * 56)}px"></i><small>'${y.slice(2)}</small></div>`).join('');
   $('#years').scrollLeft = $('#years').scrollWidth;
 
-  $('#grid').innerHTML = list.map(g => {
-    const name = g.igdb_name || g.title;
-    const bg = g.cover ? `style="background-image:url('/covers/${encodeURIComponent(g.cover)}')"` : '';
-    return `<div class="card" data-id="${g.id}">
-      <div class="cover" ${bg}>${g.cover ? '' : esc(name)}
-        ${full(g) ? `<span class="plat" title="Tutti gli achievement (${g.ach_done}/${g.ach_total})">${PLAT_SVG}</span>` : ''}
-        ${doubtful(g) ? `<span class="warn" title="Abbinamento IGDB da controllare: apri la scheda">?</span>` : ''}
-        ${g.rating != null ? `<span class="score" style="color:${scoreColor(g.rating)}">${g.rating}</span>` : ''}</div>
-      <div class="meta"><div class="t" title="${esc(name)}">${esc(name)}</div>
-        <div class="s"><span class="badge">${esc(g.platform)}</span>${fmtDate(g.completed_on)}</div>
-        ${playLine(g) ? `<div class="s">${playLine(g)}</div>` : ''}</div>
-    </div>`;
-  }).join('');
+  $('#grid').innerHTML = list.map(g => cardHtml(g)).join('');
   $('#empty').hidden = list.length > 0;
+}
+function cardHtml(g, extra = '') {
+  const name = g.igdb_name || g.title;
+  const bg = g.cover ? `style="background-image:url('${coverUrl(g)}')"` : '';
+  return `<div class="card" data-id="${g.id}">
+    <div class="cover" ${bg}>${g.cover ? '' : esc(name)}
+      ${full(g) ? `<span class="plat" title="${esc(t('all_ach', {d: g.ach_done, t: g.ach_total}))}">${PLAT_SVG}</span>` : ''}
+      ${!extra && doubtful(g) ? `<span class="warn" title="${esc(t('check_badge'))}">?</span>` : ''}
+      ${g.rating != null ? `<span class="score" style="color:${scoreColor(g.rating)}">${g.rating}</span>` : ''}${extra}</div>
+    <div class="meta"><div class="t" title="${esc(name)}">${esc(name)}</div>
+      <div class="s"><span class="badge">${esc(g.platform)}</span>${fmtDate(g.completed_on)}</div>
+      ${playLine(g) ? `<div class="s">${playLine(g)}</div>` : ''}</div>
+  </div>`;
 }
 
 function openDialog(g) {
@@ -309,10 +673,9 @@ function openDialog(g) {
   f.rating.value = g?.rating ?? '';
   f.hours.value = g?.manual_hours ?? '';
   f.hours.placeholder = g?.plat_hours != null ? `${g.plat_hours}` : '';
-  const SRCN = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
   $('#platInfo').textContent = g?.plat_source
-    ? `Dalla piattaforma (${SRCN[g.plat_source] || g.plat_source}): ${g.plat_hours != null ? fmtHours(g.plat_hours) : 'ore non disponibili'}`
-      + (g.ach_total ? ` · ${g.ach_done}/${g.ach_total} achievement` : '') + (g.manual_hours != null ? ' — le ore scritte qui hanno la precedenza' : '')
+    ? t('from_plat', {s: SRC[g.plat_source] || g.plat_source, h: g.plat_hours != null ? fmtHours(g.plat_hours) : t('no_hours')})
+      + (g.ach_total ? ' · ' + t('ach_n', {d: g.ach_done, t: g.ach_total}) : '') + (g.manual_hours != null ? t('manual_wins') : '')
     : '';
   f.notes.value = g?.notes ?? '';
   $('#btnDel').hidden = !g;
@@ -321,9 +684,9 @@ function openDialog(g) {
   if (g) {
     $('#igdbQ').value = g.title;
     $('#igdbCur').innerHTML = g.igdb_id
-      ? `${g.cover ? `<img src="/covers/${encodeURIComponent(g.cover)}">` : ''}<span>Abbinato a IGDB: <b>${esc(g.igdb_name)}</b>${g.release_year ? ` (${g.release_year})` : ''}
-         ${g.match_manual ? '· scelto a mano' : doubtful(g) ? '· <b style="color:var(--mid)">da controllare</b>: se è giusto, cliccalo qui sotto per confermarlo' : '· automatico'}</span>`
-      : '<span>Non ancora abbinato a IGDB.</span>';
+      ? `${g.cover ? `<img src="${coverUrl(g)}">` : ''}<span>${t('igdb_matched')} <b>${esc(g.igdb_name)}</b>${g.release_year ? ` (${g.release_year})` : ''}
+         ${g.match_manual ? t('manual_pick') : doubtful(g) ? t('to_check') : t('automatic')}</span>`
+      : `<span>${t('not_matched')}</span>`;
   }
   $('#dlg').showModal();
 }
@@ -345,7 +708,7 @@ $('#form').addEventListener('submit', async e => {
       cands = cands.filter(x => x.id !== id);
       renderCands();
       loadSync();
-      toast('Aggiunto al registro');
+      toast(t('added_log'));
       await load();
       setTimeout(load, 2500);   // la copertina arriva da IGDB in background
       return;
@@ -354,11 +717,11 @@ $('#form').addEventListener('submit', async e => {
     else { await api('/api/games', {method: 'POST', body: JSON.stringify(body)}); setTimeout(load, 2500); }
     $('#dlg').close();
     await load();
-  } catch (err) { toast('Errore: ' + err.message, 5000); }
+  } catch (err) { toast(t('error') + err.message, 5000); }
 });
 
 $('#btnDel').onclick = async () => {
-  if (!editing || !confirm(`Eliminare "${editing.title}"?`)) return;
+  if (!editing || !confirm(t('confirm_delete', {t: editing.title}))) return;
   await api(`/api/games/${editing.id}`, {method: 'DELETE'});
   $('#dlg').close();
   await load();
@@ -369,13 +732,13 @@ $('#btnAdd').onclick = () => openDialog(null);
 async function igdbSearch() {
   const q = $('#igdbQ').value.trim();
   if (!q) return;
-  $('#igdbRes').textContent = 'Cerco…';
+  $('#igdbRes').textContent = t('searching');
   try {
     const res = await api('/api/igdb/search?q=' + encodeURIComponent(q) + '&platform=' + encodeURIComponent($('#form').platform.value));
     $('#igdbRes').innerHTML = res.length ? res.map(r => `<div data-igdb="${r.id}" title="${esc(r.platforms.join(', '))}">
         ${r.cover_id ? `<img loading="lazy" src="https://images.igdb.com/igdb/image/upload/t_cover_small/${r.cover_id}.jpg">` : '<span class="ph"></span>'}
-        ${esc(r.name)}${r.year ? ` (${r.year})` : ''}</div>`).join('') : 'Nessun risultato.';
-  } catch (err) { $('#igdbRes').textContent = 'Errore: ' + err.message; }
+        ${esc(r.name)}${r.year ? ` (${r.year})` : ''}</div>`).join('') : t('no_results');
+  } catch (err) { $('#igdbRes').textContent = t('error') + err.message; }
 }
 $('#igdbGo').onclick = igdbSearch;
 $('#igdbQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); igdbSearch(); } });
@@ -386,23 +749,23 @@ $('#igdbRes').addEventListener('click', async e => {
     editing = await api(`/api/games/${editing.id}/match`, {method: 'POST', body: JSON.stringify({igdb_id: Number(d.dataset.igdb)})});
     await load();
     openDialog(editing);
-    toast('Copertina aggiornata');
-  } catch (err) { toast('Errore: ' + err.message, 5000); }
+    toast(t('cover_updated'));
+  } catch (err) { toast(t('error') + err.message, 5000); }
 });
 
 $('#btnCovers').onclick = async () => {
   const b = $('#btnCovers');
-  b.disabled = true; b.querySelector('.lbl-long').textContent = 'Abbino…';
+  b.disabled = true; b.querySelector('.lbl-long').textContent = t('matching');
   try {
     const r = await api('/api/covers/auto', {method: 'POST'});
-    toast(`Abbinati ${r.matched}, da controllare ${r.doubtful}` + (r.not_found.length ? `, non trovati: ${r.not_found.join(', ')}` : ''), 8000);
+    toast(t('covers_done', {m: r.matched, d: r.doubtful}) + (r.not_found.length ? t('not_found', {l: r.not_found.join(', ')}) : ''), 8000);
     await load();
-  } catch (err) { toast('Errore: ' + err.message, 5000); }
-  b.disabled = false; b.querySelector('.lbl-long').textContent = 'Copertine mancanti';
+  } catch (err) { toast(t('error') + err.message, 5000); }
+  b.disabled = false; b.querySelector('.lbl-long').textContent = t('covers_btn');
 };
 
-$('#grid').addEventListener('click', e => {
-  const c = e.target.closest('.card');
+document.addEventListener('click', e => {   // schede gioco nel registro e nel resoconto
+  const c = e.target.closest('.card[data-id], .item[data-id]');
   if (c) openDialog(games.find(g => g.id === Number(c.dataset.id)));
 });
 $('#years').addEventListener('click', e => {
@@ -413,23 +776,123 @@ $('#years').addEventListener('click', e => {
 });
 ['#q', '#fYear', '#fPlat', '#fVoto', '#sort', '#fCheck'].forEach(s => $(s).addEventListener('input', render));
 
+// --- schede ------------------------------------------------------------------------
+let tab = 'reg';
+$('#tabReg').onclick = () => showTab('reg');
+$('#tabRv').onclick = () => showTab('rv');
+$('#tabCand').onclick = () => showTab('cand');
+function showTab(x) {
+  tab = x;
+  ['reg', 'rv', 'cand'].forEach(k => {
+    $('#tab' + {reg: 'Reg', rv: 'Rv', cand: 'Cand'}[k]).classList.toggle('on', k === x);
+    $('#' + k + 'View').hidden = k !== x;
+  });
+  $('#btnAdd').hidden = x !== 'reg';
+  $('#btnCovers').hidden = x !== 'reg' || !cfg.igdb;
+  if (x === 'cand') { loadSync(); loadCands(); }
+  if (x === 'rv') renderReview();
+}
+
+// --- resoconto ---------------------------------------------------------------------
+let rvYear = null;   // null = l'anno più recente con giochi; 'all' = sempre
+function renderReview() {
+  const years = [...new Set(games.map(year).filter(Boolean))].sort().reverse();
+  if (rvYear === null) rvYear = years.includes(String(new Date().getFullYear())) ? String(new Date().getFullYear()) : (years[0] || 'all');
+  const all = rvYear === 'all';
+  const list = games.filter(g => all || year(g) === rvYear);
+  const chips = `<div class="chips">${years.map(y => `<button data-rv="${y}" class="${y === rvYear ? 'on' : ''}">${y}</button>`).join('')}
+    <button data-rv="all" class="${all ? 'on' : ''}">${t('rv_all')}</button></div>`;
+  if (!list.length) { $('#rv').innerHTML = chips + `<div class="empty">${t('rv_none')}</div>`; return; }
+
+  const withH = list.filter(g => g.hours != null);
+  const hours = Math.round(withH.reduce((a, g) => a + g.hours, 0));
+  const plat = list.filter(full).length;
+  const nf = n => n.toLocaleString(t('locale'));
+
+  // per mese (un anno) o per anno (sempre)
+  let buckets;
+  if (all) {
+    const ys = years.slice().reverse();
+    buckets = ys.map(y => ({label: `'${y.slice(2)}`, full: y, games: list.filter(g => year(g) === y)}));
+  } else {
+    buckets = I18N[lang].months.map((m, i) => ({label: m, full: m, games: list.filter(g => g.completed_on && Number(g.completed_on.slice(5, 7)) === i + 1)}));
+  }
+  const bmax = Math.max(1, ...buckets.map(b => b.games.length));
+  const best = buckets.reduce((a, b) => b.games.length > a.games.length ? b : a, buckets[0]);
+  const tipList = gs => gs.slice(0, 8).map(g => esc(g.igdb_name || g.title)).join('<br>') + (gs.length > 8 ? '<br>' + t('and_more', {n: gs.length - 8}) : '');
+  const vbars = `<div class="vbars">${buckets.map(b => `<div data-tip="<b>${esc(b.full)} · ${t('bar_tip', {n: b.games.length})}</b>${tipList(b.games)}">
+      <em>${b.games.length || ''}</em><i style="height:${b.games.length ? Math.max(4, b.games.length / bmax * 110) : 0}px"></i><small>${esc(b.label)}</small></div>`).join('')}</div>`;
+
+  const byPlat = Object.entries(list.reduce((a, g) => (a[g.platform] = (a[g.platform] || []).concat(g), a), {}))
+    .sort((a, b) => b[1].length - a[1].length);
+  const pmax = byPlat[0][1].length;
+  const shownPlat = byPlat.slice(0, 7), restPlat = byPlat.slice(7).flatMap(x => x[1]);
+  if (restPlat.length) shownPlat.push([lang === 'it' ? 'Altre' : 'Other', restPlat]);
+  const hbarsPlat = `<div class="hbars">${shownPlat.map(([p, gs]) => `<div data-tip="<b>${esc(p)} · ${t('bar_tip', {n: gs.length})}</b>${tipList(gs)}">
+      <span>${esc(p)}</span><i style="width:${gs.length / pmax * 100}%"></i><b>${gs.length}</b></div>`).join('')}</div>`;
+
+  const rated = list.filter(g => g.rating != null);
+  const rb = [10, 9, 8, 7, 6].map(v => ({label: v === 10 ? '10' : `${v}–${v + .5}`, games: rated.filter(g => v === 10 ? g.rating === 10 : g.rating >= v && g.rating < v + 1)}));
+  const low = rated.filter(g => g.rating < 6);
+  if (low.length) rb.push({label: '< 6', games: low});
+  const rmax = Math.max(1, ...rb.map(b => b.games.length));
+  const hbarsRate = `<div class="hbars">${rb.map(b => `<div data-tip="<b>${b.label} · ${t('bar_tip', {n: b.games.length})}</b>${tipList(b.games)}">
+      <span>${b.label}</span><i style="width:${b.games.length / rmax * 100}%"></i><b>${b.games.length}</b></div>`).join('')}</div>`;
+
+  const top = rated.slice().sort((a, b) => b.rating - a.rating || (b.hours ?? 0) - (a.hours ?? 0)).slice(0, all ? 10 : 5);
+  const byDate = list.filter(g => g.completed_on).sort((a, b) => a.completed_on.localeCompare(b.completed_on));
+  const byHours = withH.slice().sort((a, b) => b.hours - a.hours);
+  const byRel = list.filter(g => g.release_year).sort((a, b) => a.release_year - b.release_year);
+  const hl = [
+    [t('hl_longest'), byHours[0], g => fmtHours(g.hours)],
+    [t('hl_shortest'), byHours.length > 1 ? byHours[byHours.length - 1] : null, g => fmtHours(g.hours)],
+    [t('hl_first'), all ? null : byDate[0], g => fmtDate(g.completed_on)],
+    [t('hl_last'), all ? null : byDate[byDate.length - 1], g => fmtDate(g.completed_on)],
+    [t('hl_oldest'), byRel[0], g => t('released', {y: g.release_year})],
+    [t('hl_newest'), byRel.length > 1 ? byRel[byRel.length - 1] : null, g => t('released', {y: g.release_year})],
+  ].filter(x => x[1]);
+
+  $('#rv').innerHTML = chips + `
+    <div class="rv-hero"><h2>${all ? t('rv_title_all') : t('rv_title_year', {y: rvYear})}</h2>
+      <p>${t('rv_sub', {n: list.length, h: nf(hours)})}${withH.length < list.length ? ` · <small>${t('hours_on', {n: withH.length, t: list.length})}</small>` : ''}</p></div>
+    <div class="rv-tiles">
+      <div class="tile"><b>${list.length}</b><span>${t('rv_games')}</span></div>
+      <div class="tile"><b>${nf(hours)}</b><span>${t('rv_hours')}</span></div>
+      <div class="tile"><b>${avg(list)}</b><span>${t('rv_avg')}</span></div>
+      <div class="tile"><b>${plat}</b><span>${t('rv_plat')}</span></div>
+      <div class="tile"><b>${best.games.length ? esc(best.full) : '–'}</b><span>${t(all ? 'rv_best_year' : 'rv_best_month')}${best.games.length ? ` · ${best.games.length}` : ''}</span></div>
+    </div>
+    <div class="panel"><h3>${t(all ? 'rv_year_chart' : 'rv_month_chart')}</h3>${vbars}</div>
+    ${top.length ? `<div><h3 style="margin:0 0 10px;font-size:15px">${t('rv_top')}</h3><div class="top">${top.map((g, i) => cardHtml(g, `<span class="rank">#${i + 1}</span>`)).join('')}</div></div>` : ''}
+    <div class="rv-row">
+      <div class="panel"><h3>${t('rv_platforms')}</h3>${hbarsPlat}</div>
+      ${rated.length ? `<div class="panel"><h3>${t('rv_ratings')}</h3>${hbarsRate}</div>` : ''}
+    </div>
+    ${hl.length ? `<div><h3 style="margin:0 0 10px;font-size:15px">${t('rv_highlights')}</h3><div class="hl">${hl.map(([lbl, g, f]) => `
+      <div class="item" data-id="${g.id}">${g.cover ? `<img src="${coverUrl(g)}" alt="">` : '<span class="ph"></span>'}
+        <div><small>${lbl}</small><b>${esc(g.igdb_name || g.title)}</b><span>${f(g)} · ${esc(g.platform)}</span></div></div>`).join('')}</div></div>` : ''}`;
+}
+$('#rv').addEventListener('click', e => {
+  const b = e.target.closest('[data-rv]');
+  if (b) { rvYear = b.dataset.rv; renderReview(); }
+});
+// tooltip delle barre (anche al tocco)
+const tip = $('#tip');
+function showTip(e) {
+  const el = e.target.closest('[data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  tip.innerHTML = el.dataset.tip;
+  tip.style.display = 'block';
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+$('#rv').addEventListener('mousemove', showTip);
+$('#rv').addEventListener('click', showTip);
+$('#rv').addEventListener('mouseleave', () => tip.style.display = 'none');
+
 // --- dalle piattaforme ---------------------------------------------------------
-const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
-const SIG = {story: '🏁 Fine storia', platinum: '🏆 Platino', 100: '💯 Tutti gli achievement', last: '🕒 Ultimo achievement'};
 const STRONG = new Set(['story', 'platinum', '100']);
 let cands = [], confirming = null, syncTimer = null;
-
-$('#tabReg').onclick = () => showTab('reg');
-$('#tabCand').onclick = () => showTab('cand');
-function showTab(t) {
-  $('#tabReg').classList.toggle('on', t === 'reg');
-  $('#tabCand').classList.toggle('on', t === 'cand');
-  $('#regView').hidden = t !== 'reg';
-  $('#candView').hidden = t !== 'cand';
-  $('#btnAdd').hidden = $('#btnCovers').hidden = t !== 'reg';
-  if (t === 'reg') $('#btnCovers').hidden = !cfg.igdb;
-  if (t === 'cand') { loadSync(); loadCands(); }
-}
 
 async function loadSync() {
   const st = await api('/api/sync');
@@ -438,12 +901,13 @@ async function loadSync() {
     running ||= v.status === 'running';
     newCount += v.strong || 0;
     const cls = v.status === 'error' ? 'err' : v.status === 'partial' ? 'part' : 'msg';
-    const when = v.last_ok ? `ultima riuscita ${new Date(v.last_ok).toLocaleString('it-IT', {dateStyle: 'short', timeStyle: 'short'})}` : 'mai sincronizzato';
+    const when = v.last_ok ? t('last_ok', {w: new Date(v.last_ok).toLocaleString(t('locale'), {dateStyle: 'short', timeStyle: 'short'})}) : t('never');
+    const m = v.status === 'running' ? I18N[lang].sync.running : tSync(v.message);
     return `<div class="src"><h3>${SRC[k]}
-        ${v.configured ? `<button data-sync="${k}" ${v.status === 'running' ? 'disabled' : ''}>${v.status === 'running' ? 'In corso…' : 'Sincronizza'}</button>` : ''}</h3>
+        ${v.configured ? `<button data-sync="${k}" ${v.status === 'running' ? 'disabled' : ''}>${v.status === 'running' ? t('sync_running') : t('sync_btn')}</button>` : ''}</h3>
       ${v.configured
-        ? `<div class="detail ${cls}">${esc(v.message || '')}</div><div class="msg">${when}${v.total ? ` · ${v.total} giochi, ${v.new || 0} da valutare` : ''}</div>`
-        : '<div class="msg">Non configurato: credenziali mancanti nel .env</div>'}</div>`;
+        ? `<div class="detail ${cls}">${esc(m)}</div><div class="msg">${when}${v.total ? t('games_new', {t: v.total, n: v.new || 0}) : ''}</div>`
+        : `<div class="msg">${t('not_set')}</div>`}</div>`;
   }).join('');
   $('#nCand').textContent = newCount ? `(${newCount})` : '';
   clearTimeout(syncTimer);
@@ -453,7 +917,7 @@ $('#syncbar').addEventListener('click', async e => {
   const b = e.target.closest('[data-sync]');
   if (!b) return;
   try { await api(`/api/sync/${b.dataset.sync}`, {method: 'POST'}); setTimeout(loadSync, 500); }
-  catch (err) { toast('Errore: ' + err.message, 5000); }
+  catch (err) { toast(t('error') + err.message, 5000); }
 });
 
 async function loadCands() {
@@ -466,15 +930,16 @@ function renderCands() {
     && (sig === '' || (sig === 'any' ? c.signal : STRONG.has(c.signal))));
   const st = $('#cStatus').value;
   $('#clist').innerHTML = list.map(c => {
-    const ach = c.ach_total ? `${c.ach_done}/${c.ach_total} achievement` : 'nessun achievement';
-    const sigTxt = c.signal === 'last' ? `${SIG.last}: <i>${esc(c.signal_label)}</i> · ${fmtDate(c.signal_date)} <span style="color:var(--muted)">(indizio debole)</span>`
-      : c.signal ? `${SIG[c.signal]}: <i>${esc(c.signal_label)}</i> · ${fmtDate(c.signal_date)}` : 'Nessun indizio di fine';
-    const btns = st === 'new' ? `<button class="primary" data-ok="${c.id}">Completato</button><button data-dis="${c.id}">Non completato</button>`
-      : st === 'dismissed' ? `<button data-res="${c.id}">Ripristina</button>` : '';
+    const ach = c.ach_total ? t('ach_n', {d: c.ach_done, t: c.ach_total}) : t('no_ach');
+    const label = c.signal === '100' || !c.signal_label ? '' : `: <i>${esc(c.signal_label)}</i>`;
+    const sigTxt = c.signal === 'last' ? `${t('sig_last')}${label} · ${fmtDate(c.signal_date)} <span style="color:var(--muted)">${t('weak')}</span>`
+      : c.signal ? `${t('sig_' + c.signal)}${label} · ${fmtDate(c.signal_date)}` : t('no_signal');
+    const btns = st === 'new' ? `<button class="primary" data-ok="${c.id}">${t('btn_done')}</button><button data-dis="${c.id}">${t('btn_notdone')}</button>`
+      : st === 'dismissed' ? `<button data-res="${c.id}">${t('btn_restore')}</button>` : '';
     return `<div class="cand">
       ${c.image_url ? `<img loading="lazy" src="${esc(c.image_url)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph'}))">` : '<span class="ph"></span>'}
       <div><div class="t">${esc(c.title)}</div>
-        <div class="s"><span class="badge">${esc(c.platform)}</span>${c.hours != null ? `${c.hours} h · ` : ''}${ach}${c.last_played ? ` · ultimo avvio ${fmtDate(c.last_played)}` : ''}</div>
+        <div class="s"><span class="badge">${esc(c.platform)}</span>${c.hours != null ? `${c.hours} h · ` : ''}${ach}${c.last_played ? t('last_played', {d: fmtDate(c.last_played)}) : ''}</div>
         <div class="sig ${c.signal ? '' : 'none'}">${sigTxt}</div></div>
       <div class="btns">${btns}</div></div>`;
   }).join('');
@@ -495,8 +960,8 @@ $('#clist').addEventListener('click', async e => {
     f.completed_on.value = c.signal_date || c.last_played || '';
     f.notes.value = '';
     f.hours.placeholder = c.hours != null ? `${c.hours}` : '';
-    $('#platInfo').textContent = (c.hours != null ? `Dalla piattaforma: ${fmtHours(c.hours)}` : '')
-      + (c.ach_total ? ` · ${c.ach_done}/${c.ach_total} achievement` : '');
+    $('#platInfo').textContent = (c.hours != null ? t('from_plat', {s: SRC[c.source], h: fmtHours(c.hours)}) : '')
+      + (c.ach_total ? ' · ' + t('ach_n', {d: c.ach_done, t: c.ach_total}) : '');
     f.rating.focus();
     return;
   }
@@ -508,10 +973,113 @@ $('#clist').addEventListener('click', async e => {
 });
 $('#dlg').addEventListener('close', () => { confirming = null; });
 
-load().then(() => api('/api/sync')).then(st => {
-  const n = Object.values(st).reduce((a, v) => a + (v.strong || 0), 0);
-  $('#nCand').textContent = n ? `(${n})` : '';
-}).catch(err => toast('Errore nel caricamento: ' + err.message, 8000));
+// --- impostazioni --------------------------------------------------------------
+async function openSettings() {
+  $('#setLang').value = lang;
+  $('#setWho').textContent = t('signed_as', {u: me.username, a: me.is_admin ? t('admin_tag') : ''});
+  $('#tokenOut').hidden = true;
+  $('#btnToken').textContent = t(me.has_token ? 'token_regen' : 'token_new');
+  $('#btnTokenDel').hidden = !me.has_token;
+  $('#credForm').reset();
+  credState = await api('/api/me/credentials');
+  showCredState();
+  $('#usersSec').hidden = !me.is_admin;
+  if (me.is_admin) await loadUsers();
+  $('#setDlg').showModal();
+}
+let credState = {};
+const showCredState = () => $$('.cst').forEach(e => { e.textContent = credState[e.dataset.k] ? t('is_set') : ''; e.className = 'cst ok'; });
+async function loadUsers() {
+  const us = await api('/api/users');
+  $('#usersList').innerHTML = us.map(u => `<div><span><b>${esc(u.username)}</b>${u.is_admin ? ' · admin' : ''} · ${t('games_n', {n: u.games})}${u.id === me.id ? ` (${t('you')})` : ''}</span>
+    <button type="button" data-reset="${u.id}" data-name="${esc(u.username)}">${t('reset_pw')}</button>
+    ${u.id === me.id ? '' : `<button type="button" class="danger" data-deluser="${u.id}" data-name="${esc(u.username)}" data-n="${u.games}">${t('del_user')}</button>`}</div>`).join('');
+}
+$('#btnSettings').onclick = () => openSettings().catch(err => toast(t('error') + err.message, 5000));
+$('#setClose').onclick = () => $('#setDlg').close();
+$('#setLang').addEventListener('input', async e => {
+  lang = e.target.value;
+  localStorage.setItem('rc_lang', lang);
+  await api('/api/me', {method: 'PUT', body: JSON.stringify({lang})});
+  me.lang = lang;
+  applyI18n();
+  render();
+  if (tab === 'rv') renderReview();
+  if (tab === 'cand') { loadSync(); renderCands(); }
+  $('#setWho').textContent = t('signed_as', {u: me.username, a: me.is_admin ? t('admin_tag') : ''});
+  $('#btnToken').textContent = t(me.has_token ? 'token_regen' : 'token_new');
+  showCredState();
+  if (me.is_admin) loadUsers();
+});
+$('#btnLogout').onclick = async () => { await api('/api/auth/logout', {method: 'POST'}); showLogin(false); };
+$('#pwForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    await api('/api/me/password', {method: 'POST', body: JSON.stringify({old: f.old.value, new: f.new.value})});
+    f.reset(); toast(t('pw_changed'), 5000);
+  } catch (err) { toast(t('error') + err.message, 5000); }
+});
+$('#credForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {};
+  // vuoto = invariato; uno spazio = cancella
+  [...e.target.elements].filter(x => x.name).forEach(x => { if (x.value !== '') body[x.name] = x.value.trim(); });
+  try {
+    credState = await api('/api/me/credentials', {method: 'PUT', body: JSON.stringify(body)});
+    e.target.reset();
+    showCredState();
+    toast(t('creds_saved'));
+    const st = await api('/api/sync');
+    for (const [k, v] of Object.entries(st)) {
+      const changed = Object.keys(body).some(b => ({steam_id: 'steam', steam_key: 'steam', xbl_key: 'xbox', psn_npsso: 'psn'})[b] === k);
+      if (v.configured && changed) await api(`/api/sync/${k}`, {method: 'POST'}).catch(() => {});
+    }
+  } catch (err) { toast(t('error') + err.message, 5000); }
+});
+$('#btnToken').onclick = async () => {
+  const {token} = await api('/api/me/token', {method: 'POST'});
+  me.has_token = true;
+  $('#tokenOut').innerHTML = `${t('token_once')}<br><code>${esc(token)}</code>`;
+  $('#tokenOut').hidden = false;
+  $('#btnToken').textContent = t('token_regen');
+  $('#btnTokenDel').hidden = false;
+};
+$('#btnTokenDel').onclick = async () => {
+  await api('/api/me/token', {method: 'DELETE'});
+  me.has_token = false;
+  $('#tokenOut').hidden = true; $('#btnTokenDel').hidden = true;
+  $('#btnToken').textContent = t('token_new');
+  toast(t('token_revoked'));
+};
+$('#userForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    await api('/api/users', {method: 'POST', body: JSON.stringify({username: f.username.value, password: f.password.value, is_admin: f.is_admin.checked, lang})});
+    f.reset(); toast(t('user_added')); loadUsers();
+  } catch (err) { toast(t('error') + err.message, 5000); }
+});
+$('#usersList').addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  try {
+    if (b.dataset.reset) {
+      const pw = prompt(t('reset_prompt', {u: b.dataset.name}));
+      if (!pw) return;
+      if (pw.length < 8) return toast(t('pw_short'));
+      await api(`/api/users/${b.dataset.reset}/password`, {method: 'POST', body: JSON.stringify({password: pw})});
+      toast('✓');
+      if (Number(b.dataset.reset) === me.id) showLogin(false);
+    } else if (b.dataset.deluser) {
+      if (!confirm(t('del_user_confirm', {u: b.dataset.name, n: b.dataset.n}))) return;
+      await api(`/api/users/${b.dataset.deluser}`, {method: 'DELETE'});
+      loadUsers();
+    }
+  } catch (err) { toast(t('error') + err.message, 5000); }
+});
+
+boot().catch(err => toast(t('load_err') + err.message, 8000));
 </script>
 </body>
 </html>
