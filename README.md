@@ -10,7 +10,7 @@ probably finished. It reads the achievements and trophies with their dates (stor
 platinum, 100%) and shows the suggestions in a list. You confirm or dismiss each one: nothing goes into
 your log automatically.
 
-- Grid of covers with filters (year, platform, rating), sorting, and CSV export
+- Grid of covers with filters (year, platform, rating) and sorting
 - Hours played and achievements for every game, plus a platinum badge when everything is unlocked
 - **Year in review**: one year or all time, with:
   - games finished per month;
@@ -76,6 +76,16 @@ The platforms record unlocks, not "completed". For each game Epilogg looks, in t
 
 The date it proposes is the unlock date. Games whose title matches one already in your log are linked
 to it, and lend it their hours and achievements.
+
+## Import and export
+
+⚙ Settings → *Your data* exports your log as CSV, or imports one: an Epilogg export, or any sheet with at
+least `title` and `platform` columns.
+
+- **Optional columns**: `completed_on` (or `date`), `rating`, `hours`, `notes`, `igdb_id`.
+- **Format**: comma or semicolon separated; dates such as `2026-11-26` or `26/11/2026`.
+- **Duplicates**: games already in the log (same title and date) are skipped.
+- **Covers**: they are matched in the background. When the file has an `igdb_id`, that game is used as is.
 
 ## Homepage widget
 

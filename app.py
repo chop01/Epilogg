@@ -654,16 +654,149 @@ def candidate_status(cid: int, action: str, request: Request):
     return {"ok": True}
 
 
+EXPORT_COLS = ["completed_on", "title", "platform", "rating", "hours", "notes", "igdb_id",
+               # read-only on import: they come from IGDB and the platforms
+               "igdb_name", "release_year", "platform_hours", "ach_done", "ach_total"]
+
+
 @app.get("/api/export.csv")
 def export_csv(request: Request):
+    """The whole log as CSV. "hours" are the ones entered by hand, "platform_hours" those from the platforms."""
     buf = io.StringIO()
     w = csv.writer(buf)
-    cols = ["completed_on", "title", "platform", "rating", "hours", "ach_done", "ach_total", "notes", "igdb_name", "igdb_id", "release_year"]
-    w.writerow(cols)
+    w.writerow(EXPORT_COLS)
     for g in games_of(uid(request)):
-        w.writerow([g[c] for c in cols])
-    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+        g = g | {"hours": g["manual_hours"], "platform_hours": g["plat_hours"]}
+        w.writerow([g[c] for c in EXPORT_COLS])
+    return StreamingResponse(iter(["\ufeff" + buf.getvalue()]), media_type="text/csv; charset=utf-8",   # BOM: Excel
                              headers={"Content-Disposition": f"attachment; filename=epilogg-{date.today()}.csv"})
+
+
+# header name (lowercase) -> field; accepts our export and the usual names of a hand-made sheet
+CSV_ALIASES = {
+    "title": "title", "name": "title", "game": "title", "titolo": "title", "gioco": "title",
+    "platform": "platform", "piattaforma": "platform", "console": "platform",
+    "completed_on": "completed_on", "completed": "completed_on", "date": "completed_on", "finished": "completed_on",
+    "data": "completed_on", "completato": "completed_on",
+    "rating": "rating", "score": "rating", "voto": "rating",
+    "hours": "hours", "ore": "hours",
+    "notes": "notes", "note": "notes",
+    "igdb_id": "igdb_id",
+}
+DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%Y/%m/%d", "%d-%m-%Y", "%m/%d/%Y")
+
+
+def parse_date(v: str):
+    v = v.strip()[:10]
+    for f in DATE_FORMATS:
+        try:
+            return datetime.strptime(v, f).date()
+        except ValueError:
+            pass
+    return None
+
+
+def parse_num(v: str):
+    try:
+        return float(v.strip().replace(",", "."))
+    except ValueError:
+        return None
+
+
+class ImportIn(BaseModel):
+    csv: str = Field(min_length=1, max_length=4_000_000)
+
+
+@app.post("/api/import")
+def import_csv(body: ImportIn, request: Request):
+    """Add the games of a CSV (our export or a sheet with at least title and platform columns).
+    Rows already in the log (same title and date) are skipped; covers are matched in the background."""
+    u = uid(request)
+    text = body.csv.lstrip("\ufeff")
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text), dialect))
+    if len(rows) < 2:
+        raise HTTPException(400, "csv_empty")
+    cols = {i: CSV_ALIASES[h.strip().lower()] for i, h in enumerate(rows[0]) if h.strip().lower() in CSV_ALIASES}
+    if not {"title", "platform"} <= set(cols.values()):
+        raise HTTPException(400, "csv_columns")
+    if len(rows) > 5001:
+        raise HTTPException(400, "csv_too_big")
+    with db() as con:
+        have = {(norm(r["title"]), r["completed_on"]) for r in
+                con.execute("SELECT title, completed_on FROM games WHERE user_id=?", (u,))}
+    added, skipped, errors, new = 0, 0, [], []
+    for n, r in enumerate(rows[1:], start=2):
+        f = {field: (r[i] if i < len(r) else "").strip() for i, field in cols.items()}
+        if not any(f.values()):
+            continue
+        if not f.get("title") or not f.get("platform"):
+            errors.append({"row": n, "error": "missing_title_platform"})
+            continue
+        when = parse_date(f["completed_on"]) if f.get("completed_on") else None
+        if f.get("completed_on") and not when:
+            errors.append({"row": n, "error": "bad_date"})
+            continue
+        rating = parse_num(f.get("rating") or "")
+        rating = None if rating is None or not 0 <= rating <= 10 else round(rating * 2) / 2
+        hours = parse_num(f.get("hours") or "")
+        key = (norm(f["title"]), when and when.isoformat())
+        if key in have:
+            skipped += 1
+            continue
+        have.add(key)
+        igdb = f.get("igdb_id", "")
+        new.append(((u, f["title"][:300], f["platform"][:50], when and when.isoformat(), rating,
+                     (f.get("notes") or None) and f["notes"][:5000], hours if hours is not None and hours >= 0 else None,
+                     "import", now(), now()), int(igdb) if igdb.isdigit() else None))
+    with db() as con:
+        ids = []
+        for vals, igdb in new:
+            cur = con.execute("INSERT INTO games (user_id, title, platform, completed_on, rating, notes, hours, source,"
+                              " created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)", vals)
+            ids.append((cur.lastrowid, vals[1], vals[2], igdb))
+        added = len(ids)
+    if ids:
+        if igdb_enabled():
+            threading.Thread(target=match_imported, args=(u, ids), daemon=True).start()
+        else:
+            connectors.link_existing(u)
+    return {"added": added, "skipped": skipped, "errors": errors[:50], "error_count": len(errors)}
+
+
+def match_imported(user_id: int, ids: list):
+    """Covers for imported games: the IGDB id from the CSV when there is one (kept as a manual pick), otherwise
+    the automatic match, one game at a time (IGDB allows 4 requests/s)."""
+    known = [x for x in ids if x[3]]
+    for i in range(0, len(known), 200):
+        chunk = known[i:i + 200]
+        try:
+            rows = igdb_query("games", f"fields name,first_release_date,cover.image_id; "
+                                       f"where id = ({','.join(str(x[3]) for x in chunk)}); limit 200;")
+        except Exception:   # noqa: BLE001 - fall back to the automatic match below
+            rows = []
+        by_id = {g["id"]: g for g in rows}
+        for gid, _, _, igdb in chunk:
+            g = by_id.get(igdb)
+            if g:
+                ts = g.get("first_release_date")
+                apply_match(gid, {"id": g["id"], "name": g["name"],
+                                  "year": datetime.fromtimestamp(ts, timezone.utc).year if ts else None,
+                                  "cover_id": (g.get("cover") or {}).get("image_id")}, manual=True)
+                ids = [x for x in ids if x[0] != gid]
+        time.sleep(0.25)
+    for gid, title, platform, _ in ids:
+        try:
+            m, sim = find_match(title, platform)
+            if m:
+                apply_match(gid, m, score=round(sim, 3))
+        except Exception:   # noqa: BLE001 - the cover can be matched later from the game card
+            pass
+        time.sleep(0.25)
+    connectors.link_existing(user_id)
 
 
 app.mount("/covers", StaticFiles(directory=COVERS), name="covers")

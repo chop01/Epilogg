@@ -110,6 +110,10 @@
   .set .hint { color: var(--muted); font-size: 12px; }
   .set .ok { color: var(--good); }
   .set code { background: var(--panel2); border-radius: 4px; padding: 1px 5px; font-size: 12px; word-break: break-all; }
+  .filebtn { display: inline-block; cursor: pointer; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; font-size: 15px; color: var(--text); }
+  .set .row > label.filebtn { flex: 0 0 auto; min-width: 0; }
+  .filebtn:hover, .set a button:hover { border-color: var(--accent); }
+  #importOut ul { margin: 4px 0 0; padding-left: 18px; }
   .users { display: flex; flex-direction: column; gap: 6px; }
   .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .users div span { margin-right: auto; }
@@ -219,7 +223,6 @@
 <header>
   <h1><img src="/static/icon.svg" alt="">Epilogg</h1>
   <button id="btnCovers" data-i18n-title="covers_title"><span class="lbl-long" data-i18n="covers_btn"></span><span class="lbl-short">🖼</span></button>
-  <a href="/api/export.csv" data-i18n-title="export_title"><button><span class="lbl-long" data-i18n="export_btn"></span><span class="lbl-short">CSV</span></button></a>
   <button class="primary" id="btnAdd" data-i18n-title="add_title">+<span class="lbl-long" data-i18n="add_btn"></span></button>
   <button id="btnSettings" data-i18n-title="settings">⚙</button>
 </header>
@@ -339,6 +342,16 @@
     </section>
 
     <section>
+      <h3 data-i18n="s_data"></h3>
+      <div class="hint" data-i18n-html="h_data"></div>
+      <div class="row">
+        <a href="/api/export.csv" download><button type="button" data-i18n="export_btn"></button></a>
+        <label class="filebtn"><input type="file" id="importFile" accept=".csv,text/csv" hidden><span data-i18n="import_btn"></span></label>
+      </div>
+      <div id="importOut" class="hint" hidden></div>
+    </section>
+
+    <section>
       <h3 data-i18n="s_platforms"></h3>
       <div class="hint" data-i18n="s_platforms_hint"></div>
       <form id="credForm" style="display:flex;flex-direction:column;gap:10px">
@@ -390,7 +403,7 @@ const I18N = {
     tagline: 'Every game you finished, in one place', setup_note: 'First start: create the administrator account. Games and platform keys already in the app will be assigned to it.',
     username: 'Username', password: 'Password', password_repeat: 'Repeat password', language: 'Language',
     login: 'Sign in', create_admin: 'Create account', pw_mismatch: 'The passwords do not match', pw_short: 'At least 8 characters',
-    covers_btn: 'Missing covers', covers_title: 'Match games without a cover on IGDB', export_btn: 'Export CSV', export_title: 'Export CSV',
+    covers_btn: 'Missing covers', covers_title: 'Match games without a cover on IGDB', export_btn: 'Export CSV',
     add_btn: ' Add', add_title: 'Add a game', settings: 'Settings',
     tab_log: 'Log', tab_review: 'Year in review', tab_platforms: 'From platforms',
     completed: 'completed', avg_rating: 'average rating', in_year: 'in {y}', years_title: 'Click a year to filter',
@@ -418,6 +431,10 @@ const I18N = {
     s_general: 'General', logout: 'Sign out', signed_as: 'Signed in as {u}{a}', admin_tag: ' (admin)',
     s_password: 'Password', pw_old: 'Current password', pw_new: 'New password (8+ characters)', change: 'Change',
     pw_changed: 'Password changed. Other devices have been signed out.',
+    s_data: 'Your data', import_btn: 'Import CSV…', importing: 'Importing…',
+    h_data: 'Export your log as CSV, or import one: our export, or any sheet with at least <b>title</b> and <b>platform</b> columns (optional: <i>completed_on</i>/date, <i>rating</i>, <i>hours</i>, <i>notes</i>, <i>igdb_id</i>). Comma or semicolon separated; dates as 2026-11-26 or 26/11/2026. Games already in your log (same title and date) are skipped; covers are added in the background.',
+    import_done: 'Imported {a} games, {s} already in the log.', import_errs: '{n} rows not imported:', import_row: 'row {r}: {e}',
+    file_too_big: 'The file is too big (max 4 MB)',
     s_platforms: 'Platform accounts',
     s_platforms_hint: 'Fill in only the ones you use. Saved keys are never shown again: leave a field empty to keep it, type a single space to remove it.',
     is_set: '✓ set', h_steam_id: 'SteamID64 (17 digits) or your custom profile name. Profile and "Game details" must be <b>public</b>.',
@@ -442,7 +459,9 @@ const I18N = {
     err: {auth_required: 'Please sign in again', bad_login: 'Wrong username or password', too_many: 'Too many attempts: try again in 15 minutes',
       setup_done: 'Setup already done: sign in', user_exists: 'This username already exists', bad_password: 'The current password is wrong',
       admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
-      not_configured: 'Set up the account in Settings first'},
+      not_configured: 'Set up the account in Settings first', csv_empty: 'The file has no rows',
+      csv_columns: 'Title and platform columns not found in the first row', csv_too_big: 'Too many rows (max 5000)',
+      missing_title_platform: 'title or platform missing', bad_date: 'date not recognised'},
     sync: {steam_ok: '{n} games in library, {f} updated', xbox_ok: '{n} titles, {f} updated', psn_ok: '{n} games with trophies, {f} updated',
       rate_steam: 'Steam: too many requests, resumes in an hour', rate_xbox: 'OpenXBL: hourly limit reached, resumes in an hour',
       rate_psn: 'PSN: too many requests, resumes in an hour', steam_badkey: 'Steam: the API key is not valid',
@@ -455,7 +474,7 @@ const I18N = {
     tagline: 'Tutti i giochi che hai finito, in un posto solo', setup_note: "Primo avvio: crea l'account amministratore. I giochi e le chiavi delle piattaforme già presenti nell'app saranno suoi.",
     username: 'Nome utente', password: 'Password', password_repeat: 'Ripeti la password', language: 'Lingua',
     login: 'Accedi', create_admin: 'Crea account', pw_mismatch: 'Le password non coincidono', pw_short: 'Almeno 8 caratteri',
-    covers_btn: 'Copertine mancanti', covers_title: 'Abbina a IGDB i giochi senza copertina', export_btn: 'Esporta CSV', export_title: 'Esporta CSV',
+    covers_btn: 'Copertine mancanti', covers_title: 'Abbina a IGDB i giochi senza copertina', export_btn: 'Esporta CSV',
     add_btn: ' Aggiungi', add_title: 'Aggiungi un gioco', settings: 'Impostazioni',
     tab_log: 'Registro', tab_review: "Il tuo anno", tab_platforms: 'Dalle piattaforme',
     completed: 'completati', avg_rating: 'voto medio', in_year: 'nel {y}', years_title: 'Clic su un anno per filtrare',
@@ -483,6 +502,10 @@ const I18N = {
     s_general: 'Generale', logout: 'Esci', signed_as: 'Accesso come {u}{a}', admin_tag: ' (admin)',
     s_password: 'Password', pw_old: 'Password attuale', pw_new: 'Nuova password (almeno 8 caratteri)', change: 'Cambia',
     pw_changed: 'Password cambiata. Gli altri dispositivi sono stati disconnessi.',
+    s_data: 'I tuoi dati', import_btn: 'Importa CSV…', importing: 'Importo…',
+    h_data: 'Esporta il registro in CSV, o importane uno: il nostro export, o un foglio qualsiasi con almeno le colonne <b>title</b> e <b>platform</b> (anche <i>titolo</i>, <i>piattaforma</i>; facoltative <i>data</i>, <i>voto</i>, <i>ore</i>, <i>note</i>, <i>igdb_id</i>). Separatore virgola o punto e virgola; date come 2026-11-26 o 26/11/2026. I giochi già nel registro (stesso titolo e data) vengono saltati; le copertine arrivano in background.',
+    import_done: 'Importati {a} giochi, {s} già nel registro.', import_errs: '{n} righe non importate:', import_row: 'riga {r}: {e}',
+    file_too_big: 'Il file è troppo grande (max 4 MB)',
     s_platforms: 'Account delle piattaforme',
     s_platforms_hint: 'Compila solo quelle che usi. Le chiavi salvate non vengono più mostrate: lascia vuoto per tenerle, scrivi uno spazio per toglierle.',
     is_set: '✓ impostato', h_steam_id: 'SteamID64 (17 cifre) o il nome personalizzato del profilo. Profilo e "Dettagli di gioco" devono essere <b>pubblici</b>.',
@@ -507,7 +530,9 @@ const I18N = {
     err: {auth_required: 'Accedi di nuovo', bad_login: 'Nome utente o password sbagliati', too_many: 'Troppi tentativi: riprova tra 15 minuti',
       setup_done: 'Configurazione già fatta: accedi', user_exists: 'Questo nome utente esiste già', bad_password: 'La password attuale è sbagliata',
       admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
-      not_configured: "Configura prima l'account nelle Impostazioni"},
+      not_configured: "Configura prima l'account nelle Impostazioni", csv_empty: 'Il file non ha righe',
+      csv_columns: 'Colonne titolo e piattaforma non trovate nella prima riga', csv_too_big: 'Troppe righe (max 5000)',
+      missing_title_platform: 'manca titolo o piattaforma', bad_date: 'data non riconosciuta'},
     sync: {steam_ok: '{n} giochi in libreria, {f} aggiornati', xbox_ok: '{n} titoli, {f} aggiornati', psn_ok: '{n} giochi con trofei, {f} aggiornati',
       rate_steam: "Steam: troppe richieste, riprende tra un'ora", rate_xbox: "OpenXBL: limite orario raggiunto, riprende tra un'ora",
       rate_psn: "PSN: troppe richieste, riprende tra un'ora", steam_badkey: 'Steam: la chiave API non è valida',
@@ -978,6 +1003,7 @@ async function openSettings() {
   $('#setLang').value = lang;
   $('#setWho').textContent = t('signed_as', {u: me.username, a: me.is_admin ? t('admin_tag') : ''});
   $('#tokenOut').hidden = true;
+  $('#importOut').hidden = true;
   $('#btnToken').textContent = t(me.has_token ? 'token_regen' : 'token_new');
   $('#btnTokenDel').hidden = !me.has_token;
   $('#credForm').reset();
@@ -1036,6 +1062,23 @@ $('#credForm').addEventListener('submit', async e => {
       if (v.configured && changed) await api(`/api/sync/${k}`, {method: 'POST'}).catch(() => {});
     }
   } catch (err) { toast(t('error') + err.message, 5000); }
+});
+$('#importFile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const out = $('#importOut');
+  out.hidden = false;
+  if (file.size > 4e6) { out.textContent = t('file_too_big'); return; }
+  out.textContent = t('importing');
+  try {
+    const r = await api('/api/import', {method: 'POST', body: JSON.stringify({csv: await file.text()})});
+    out.innerHTML = esc(t('import_done', {a: r.added, s: r.skipped}))
+      + (r.error_count ? `<br>${esc(t('import_errs', {n: r.error_count}))}<ul>${r.errors.map(x =>
+          `<li>${esc(t('import_row', {r: x.row, e: tErr(x.error)}))}</li>`).join('')}</ul>` : '');
+    await load();
+    if (r.added) [5000, 20000, 60000].forEach(ms => setTimeout(load, ms));   // covers arrive from IGDB
+  } catch (err) { out.textContent = t('error') + err.message; }
 });
 $('#btnToken').onclick = async () => {
   const {token} = await api('/api/me/token', {method: 'POST'});
