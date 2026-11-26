@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Roll Credits</title>
+<title>Epilogg</title>
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/icon.svg">
 <meta name="theme-color" content="#14161b">
@@ -90,7 +90,7 @@
   .cand .btns { display: flex; gap: 6px; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; z-index: 20; max-width: 90vw; }
 
-  /* --- accesso --- */
+  /* --- sign-in --- */
   .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
   .login form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; }
   .login .brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 6px; text-align: center; }
@@ -100,7 +100,7 @@
   .login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   .login .err { color: var(--bad); font-size: 13px; min-height: 1em; }
 
-  /* --- impostazioni --- */
+  /* --- settings --- */
   .set { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
   .set h2 { margin: 0; font-size: 18px; }
   .set section { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -114,7 +114,7 @@
   .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .users div span { margin-right: auto; }
 
-  /* --- resoconto --- */
+  /* --- year in review --- */
   .rv { padding: 14px 24px 50px; display: flex; flex-direction: column; gap: 18px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chips button { padding: 5px 12px; border-radius: 999px; font-size: 14px; }
@@ -150,10 +150,10 @@
   .tip { position: fixed; pointer-events: none; background: #0d0f14; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; z-index: 30; max-width: 280px; display: none; }
   .tip b { display: block; }
 
-  /* --- telefono --- */
+  /* --- phones --- */
   @media (max-width: 640px) {
     body { font-size: 14px; }
-    input, select, textarea { font-size: 16px; }   /* sotto i 16px iOS zooma al tocco */
+    input, select, textarea { font-size: 16px; }   /* below 16px iOS zooms in on focus */
     header { padding: 12px 14px 6px; gap: 8px; flex-wrap: nowrap; }
     h1 { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     h1 img { width: 26px; height: 26px; }
@@ -180,7 +180,7 @@
     .src { min-width: 0; padding: 8px; font-size: 12px; }
     .src h3 { flex-direction: column; align-items: stretch; gap: 6px; font-size: 14px; }
     .src h3 button { padding: 5px 6px; font-size: 13px; }
-    .src .detail.msg { display: none; }   /* errori e limiti API restano visibili */
+    .src .detail.msg { display: none; }   /* errors and API limits stay visible */
     .clist { padding: 6px 14px 30px; }
     .cand { grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px; }
     .cand img, .cand .ph { width: 52px; height: 52px; }
@@ -197,14 +197,14 @@
 </style>
 </head>
 <body>
-<!-- sfumatura platino della coppa, definita una volta in un elemento sempre visibile -->
+<!-- platinum gradient for the cup, defined once in an element that is always rendered -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
   <stop offset="0" stop-color="#f4f6f8"/><stop offset=".5" stop-color="#b9c4ce"/><stop offset="1" stop-color="#eef1f4"/></linearGradient></defs></svg>
 
-<!-- accesso / primo avvio -->
+<!-- sign-in / first start -->
 <div class="login" id="loginView" hidden>
   <form id="loginForm">
-    <div class="brand"><img src="/static/icon.svg" alt=""><b>Roll Credits</b><span data-i18n="tagline"></span></div>
+    <div class="brand"><img src="/static/icon.svg" alt=""><b>Epilogg</b><span data-i18n="tagline"></span></div>
     <div id="setupNote" class="hint" hidden style="color:var(--muted);font-size:13px" data-i18n="setup_note"></div>
     <label><span data-i18n="username"></span><input name="username" autocomplete="username" required maxlength="40"></label>
     <label><span data-i18n="password"></span><input name="password" type="password" autocomplete="current-password" required></label>
@@ -217,7 +217,7 @@
 
 <div id="appView" hidden>
 <header>
-  <h1><img src="/static/icon.svg" alt="">Roll Credits</h1>
+  <h1><img src="/static/icon.svg" alt="">Epilogg</h1>
   <button id="btnCovers" data-i18n-title="covers_title"><span class="lbl-long" data-i18n="covers_btn"></span><span class="lbl-short">🖼</span></button>
   <a href="/api/export.csv" data-i18n-title="export_title"><button><span class="lbl-long" data-i18n="export_btn"></span><span class="lbl-short">CSV</span></button></a>
   <button class="primary" id="btnAdd" data-i18n-title="add_title">+<span class="lbl-long" data-i18n="add_btn"></span></button>
@@ -382,9 +382,9 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 let games = [], cfg = {igdb: false}, me = null, editing = null;
-let lang = localStorage.getItem('rc_lang') || 'en';
+let lang = localStorage.getItem('epilogg_lang') || 'en';
 
-// --- testi ------------------------------------------------------------------------
+// --- texts ------------------------------------------------------------------------
 const I18N = {
   en: {
     tagline: 'Every game you finished, in one place', setup_note: 'First start: create the administrator account. Games and platform keys already in the app will be assigned to it.',
@@ -553,12 +553,12 @@ const playLine = g => [g.hours != null ? `⏱ ${fmtHours(g.hours)}` : '', g.ach_
   .filter(Boolean).join(' · ');
 const full = g => g.ach_total > 0 && g.ach_done >= g.ach_total;
 const coverUrl = g => g.cover ? `/covers/${encodeURIComponent(g.cover)}` : '';
-// coppa con sfumatura platino (non l'emoji, che è dorata)
+// cup with a platinum gradient (not the emoji, which is gold)
 const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
 const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
 
-// --- accesso -----------------------------------------------------------------------
+// --- sign-in -----------------------------------------------------------------------
 let setupMode = false;
 function showLogin(setup) {
   setupMode = setup;
@@ -573,7 +573,7 @@ function showLogin(setup) {
   applyI18n();
   $('#loginBtn').textContent = t(setup ? 'create_admin' : 'login');
 }
-$('#loginLang').addEventListener('input', e => { lang = e.target.value; localStorage.setItem('rc_lang', lang); showLogin(setupMode); });
+$('#loginLang').addEventListener('input', e => { lang = e.target.value; localStorage.setItem('epilogg_lang', lang); showLogin(setupMode); });
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
@@ -596,7 +596,7 @@ async function boot() {
   if (!st.user) return showLogin(st.setup);
   me = st.user;
   lang = me.lang;
-  localStorage.setItem('rc_lang', lang);
+  localStorage.setItem('epilogg_lang', lang);
   $('#loginView').hidden = true;
   $('#appView').hidden = false;
   applyI18n();
@@ -606,7 +606,7 @@ async function boot() {
   $('#nCand').textContent = n ? `(${n})` : '';
 }
 
-// --- registro ----------------------------------------------------------------------
+// --- log -------------------------------------------------------------------------
 async function load() {
   [games, cfg] = await Promise.all([api('/api/games'), api('/api/config')]);
   me = cfg.user;
@@ -633,7 +633,7 @@ function render() {
   else if (s === 'hours') list.sort((a, b) => (b.hours ?? -1) - (a.hours ?? -1));
   else if (s === 'title') list.sort((a, b) => (a.igdb_name || a.title).localeCompare(b.igdb_name || b.title));
 
-  // riepilogo: totale e media seguono i filtri piattaforma/ricerca, il grafico anni no
+  // summary: total and average follow the platform/search filters, the year chart does not
   const thisYear = String(new Date().getFullYear());
   $('#stTot').textContent = list.length;
   $('#stYear').textContent = games.filter(g => year(g) === thisYear).length;
@@ -679,7 +679,7 @@ function openDialog(g) {
     : '';
   f.notes.value = g?.notes ?? '';
   $('#btnDel').hidden = !g;
-  $('#igdbBox').hidden = !g || !cfg.igdb;   // per un gioco nuovo l'abbinamento è automatico al salvataggio
+  $('#igdbBox').hidden = !g || !cfg.igdb;   // a new game is matched automatically on save
   $('#igdbRes').innerHTML = '';
   if (g) {
     $('#igdbQ').value = g.title;
@@ -710,7 +710,7 @@ $('#form').addEventListener('submit', async e => {
       loadSync();
       toast(t('added_log'));
       await load();
-      setTimeout(load, 2500);   // la copertina arriva da IGDB in background
+      setTimeout(load, 2500);   // the cover arrives from IGDB in the background
       return;
     }
     if (editing) await api(`/api/games/${editing.id}`, {method: 'PUT', body: JSON.stringify(body)});
@@ -764,7 +764,7 @@ $('#btnCovers').onclick = async () => {
   b.disabled = false; b.querySelector('.lbl-long').textContent = t('covers_btn');
 };
 
-document.addEventListener('click', e => {   // schede gioco nel registro e nel resoconto
+document.addEventListener('click', e => {   // game cards in the log and in the review
   const c = e.target.closest('.card[data-id], .item[data-id]');
   if (c) openDialog(games.find(g => g.id === Number(c.dataset.id)));
 });
@@ -776,7 +776,7 @@ $('#years').addEventListener('click', e => {
 });
 ['#q', '#fYear', '#fPlat', '#fVoto', '#sort', '#fCheck'].forEach(s => $(s).addEventListener('input', render));
 
-// --- schede ------------------------------------------------------------------------
+// --- tabs --------------------------------------------------------------------------
 let tab = 'reg';
 $('#tabReg').onclick = () => showTab('reg');
 $('#tabRv').onclick = () => showTab('rv');
@@ -793,8 +793,8 @@ function showTab(x) {
   if (x === 'rv') renderReview();
 }
 
-// --- resoconto ---------------------------------------------------------------------
-let rvYear = null;   // null = l'anno più recente con giochi; 'all' = sempre
+// --- year in review --------------------------------------------------------------
+let rvYear = null;   // null = the latest year with games; 'all' = all time
 function renderReview() {
   const years = [...new Set(games.map(year).filter(Boolean))].sort().reverse();
   if (rvYear === null) rvYear = years.includes(String(new Date().getFullYear())) ? String(new Date().getFullYear()) : (years[0] || 'all');
@@ -809,7 +809,7 @@ function renderReview() {
   const plat = list.filter(full).length;
   const nf = n => n.toLocaleString(t('locale'));
 
-  // per mese (un anno) o per anno (sempre)
+  // per month (one year) or per year (all time)
   let buckets;
   if (all) {
     const ys = years.slice().reverse();
@@ -876,7 +876,7 @@ $('#rv').addEventListener('click', e => {
   const b = e.target.closest('[data-rv]');
   if (b) { rvYear = b.dataset.rv; renderReview(); }
 });
-// tooltip delle barre (anche al tocco)
+// bar tooltips (on tap too)
 const tip = $('#tip');
 function showTip(e) {
   const el = e.target.closest('[data-tip]');
@@ -890,7 +890,7 @@ $('#rv').addEventListener('mousemove', showTip);
 $('#rv').addEventListener('click', showTip);
 $('#rv').addEventListener('mouseleave', () => tip.style.display = 'none');
 
-// --- dalle piattaforme ---------------------------------------------------------
+// --- from platforms -----------------------------------------------------------
 const STRONG = new Set(['story', 'platinum', '100']);
 let cands = [], confirming = null, syncTimer = null;
 
@@ -973,7 +973,7 @@ $('#clist').addEventListener('click', async e => {
 });
 $('#dlg').addEventListener('close', () => { confirming = null; });
 
-// --- impostazioni --------------------------------------------------------------
+// --- settings -----------------------------------------------------------------
 async function openSettings() {
   $('#setLang').value = lang;
   $('#setWho').textContent = t('signed_as', {u: me.username, a: me.is_admin ? t('admin_tag') : ''});
@@ -999,7 +999,7 @@ $('#btnSettings').onclick = () => openSettings().catch(err => toast(t('error') +
 $('#setClose').onclick = () => $('#setDlg').close();
 $('#setLang').addEventListener('input', async e => {
   lang = e.target.value;
-  localStorage.setItem('rc_lang', lang);
+  localStorage.setItem('epilogg_lang', lang);
   await api('/api/me', {method: 'PUT', body: JSON.stringify({lang})});
   me.lang = lang;
   applyI18n();
@@ -1023,7 +1023,7 @@ $('#pwForm').addEventListener('submit', async e => {
 $('#credForm').addEventListener('submit', async e => {
   e.preventDefault();
   const body = {};
-  // vuoto = invariato; uno spazio = cancella
+  // empty = unchanged; a single space = delete
   [...e.target.elements].filter(x => x.name).forEach(x => { if (x.value !== '') body[x.name] = x.value.trim(); });
   try {
     credState = await api('/api/me/credentials', {method: 'PUT', body: JSON.stringify(body)});

@@ -1,14 +1,15 @@
-"""Connettori Steam, Xbox (OpenXBL) e PSN: riempiono la tabella candidates.
+"""Steam, Xbox (OpenXBL) and PSN connectors: they fill the candidates table.
 
-Le piattaforme non dicono "completato": registrano achievement/trofei con data. Per ogni gioco si cerca un
-indizio di fine, in quest'ordine:
-  story    - primo achievement sbloccato il cui testo parla di fine storia (complete the game, credits, ending…)
-  platinum - platino PSN
-  100      - tutti gli achievement
-I candidati si confermano o scartano nell'app; il voto lo mette l'utente.
+Platforms do not say "completed": they record achievements/trophies with dates. For each game we look for
+an ending hint, in this order:
+  story    - first unlocked achievement whose text talks about finishing the story (complete the game, credits…)
+  platinum - PSN platinum
+  100      - all achievements
+  last     - last unlocked achievement (weak)
+Candidates are confirmed or dismissed in the app; the user adds the rating.
 
-La sincronizzazione è incrementale: il dettaglio achievement di un gioco si riscarica solo se la sua
-"impronta" (ultimo avvio, achievement sbloccati) è cambiata.
+Syncs are incremental: a game's achievements are downloaded again only when its "fingerprint"
+(last played, achievements unlocked) has changed.
 """
 import json
 import logging
@@ -24,21 +25,21 @@ from store import DATA, db, norm, now
 
 log = logging.getLogger("connectors")
 
-# Credenziali per utente nella tabella credentials (impostazioni dell'app). La chiave Steam del .env vale per
-# tutti (basta una qualsiasi chiave per leggere profili pubblici); le altre variabili del .env servono solo
-# alla prima configurazione: vengono copiate al primo admin (vedi app.setup).
+# Per-user credentials live in the credentials table (app settings). The Steam key in .env is shared by
+# everyone (any key can read public profiles); the other .env variables are only used on the first start,
+# when they are copied to the first admin (see app.setup).
 ENV_STEAM_KEY = os.environ.get("STEAM_API_KEY", "")
 ENV_CREDS = {"steam_id": os.environ.get("STEAM_ID", ""), "xbl_key": os.environ.get("XBL_API_KEY", ""),
              "psn_npsso": os.environ.get("PSN_NPSSO", "")}
 CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso")
 
 
-def psn_token_file(uid: int) -> str:   # token di sessione PSN (si rinnova da solo)
+def psn_token_file(uid: int) -> str:   # PSN session token (refreshes itself)
     return os.path.join(DATA, f"psn_token_{uid}.json")
 
 
 class SyncError(Exception):
-    """Errore da mostrare nella pagina: chiave del testo tradotto + parametri."""
+    """Error shown in the page: translated text key + parameters."""
     def __init__(self, key, **params):
         super().__init__(key)
         self.key, self.params = key, params
@@ -54,10 +55,10 @@ def creds(uid: int) -> dict:
     c.setdefault("steam_key", ENV_STEAM_KEY)
     return c
 
-MIN_MINUTES = 30   # sotto questa soglia un gioco Steam senza achievement non è nemmeno candidato
+MIN_MINUTES = 30   # below this, a Steam game without achievements is not even a candidate
 
-# Testo di un achievement che indica la fine della storia (le API sono interrogate in inglese).
-# Verbo e oggetto devono essere attaccati: "completed every mini-game" o "completed the X Island story" non valgono.
+# Achievement text that means the story is over (the APIs are queried in English).
+# Verb and object must be adjacent: "completed every mini-game" or "completed the X Island story" do not count.
 _VERB = r"(complete[ds]?|completing|finish(e[ds])?|beat(en)?|clear(ed)?)"
 END_RE = re.compile(
     rf"\b{_VERB} (the )?(main |entire |whole )?(game|story|campaign|adventure|journey|main quest|final chapter|last chapter)\b"
@@ -76,7 +77,7 @@ def is_end(name: str | None, desc: str | None, title: str | None = None) -> bool
         return False
     if any(END_RE.search(x) for x in (name, desc)):
         return True
-    # "Complete <titolo del gioco>" / 'Cleared "Ghost Trick"'
+    # "Complete <game title>" / 'Cleared "Ghost Trick"'
     t = norm(title or "")
     m = re.search(rf"\b{_VERB} (?P<rest>.+)", norm(desc))
     rest = m and m.group("rest").strip()
@@ -84,7 +85,7 @@ def is_end(name: str | None, desc: str | None, title: str | None = None) -> bool
 
 
 def day(ts) -> str | None:
-    """Unix timestamp, datetime o stringa ISO -> YYYY-MM-DD (UTC)."""
+    """Unix timestamp, datetime or ISO string -> YYYY-MM-DD (UTC)."""
     if not ts:
         return None
     if isinstance(ts, (int, float)):
@@ -95,9 +96,9 @@ def day(ts) -> str | None:
 
 
 def end_signal(achs: list[dict], title: str, total: int = 0, platinum: dict | None = None):
-    """achs: [{name, desc, date}] dei soli sbloccati. Ritorna (signal, label, date), dal più al meno affidabile:
-    story (primo achievement di fine sbloccato), platinum, 100 (tutti), last (ultimo sbloccato: indizio debole,
-    giusto ~9 volte su 10 sui giochi del registro, sbaglia se il gioco è stato ripreso dopo per il post-game)."""
+    """achs: [{name, desc, date}] of the unlocked ones. Returns (signal, label, date), most reliable first:
+    story (first ending achievement unlocked), platinum, 100 (all), last (last unlocked: weak hint, right
+    ~9 times out of 10 in testing, wrong when the game was picked up again later for the post-game)."""
     dated = [a for a in achs if a.get("date")]
     story = sorted((a for a in dated if is_end(a["name"], a["desc"], title)), key=lambda a: a["date"])
     if story:
@@ -112,14 +113,14 @@ def end_signal(achs: list[dict], title: str, total: int = 0, platinum: dict | No
     return "last", last["name"], last["date"]
 
 
-# --- stato e scrittura --------------------------------------------------------
+# --- state and writes ---------------------------------------------------------
 
-_locks: dict = {}   # (utente, fonte) -> Lock
+_locks: dict = {}   # (user, source) -> Lock
 _locks_guard = threading.Lock()
 
 
 class RateLimited(SyncError):
-    """Limite di richieste raggiunto: la sincronizzazione riprende al giro successivo."""
+    """Rate limit reached: the sync resumes on the next round."""
 
 
 def configured(uid: int) -> dict:
@@ -138,14 +139,14 @@ def set_state(uid, source, status, message=None, ok=False):
 
 
 def known(uid, source) -> dict:
-    """ext_id -> fingerprint dei candidati già scaricati."""
+    """ext_id -> fingerprint of the candidates already downloaded."""
     with db() as con:
         return {r["ext_id"]: r["fingerprint"] for r in
                 con.execute("SELECT ext_id, fingerprint FROM candidates WHERE user_id=? AND source=?", (uid, source))}
 
 
 def upsert(uid, c: dict):
-    """Inserisce/aggiorna un candidato; lo collega a un gioco già nel registro se il titolo coincide."""
+    """Insert/update a candidate; link it to a game already in the log when the title matches."""
     c = {k: c.get(k) for k in ("source", "ext_id", "title", "platform", "image_url", "hours", "ach_done",
                                "ach_total", "first_played", "last_played", "signal", "signal_label",
                                "signal_date", "fingerprint")}
@@ -165,7 +166,7 @@ def upsert(uid, c: dict):
 
 
 def update_light(uid, source, ext_id, **fields):
-    """Aggiorna solo ore/ultimo avvio senza toccare il resto (impronta invariata)."""
+    """Update only hours/last played, leaving the rest alone (fingerprint unchanged)."""
     if not fields:
         return
     sets = ", ".join(f"{k}=?" for k in fields)
@@ -178,14 +179,14 @@ SUBTITLE_RE = re.compile(r"\s*(:|&|\s[-\u2013\u2014]\s|\(|\u2122|\u00ae)")
 
 
 def head(title: str) -> str:
-    """Titolo senza sottotitolo: "Yakuza Kiwami 3 & Dark Ties" -> "yakuza kiwami 3"."""
+    """Title without subtitle: "Yakuza Kiwami 3 & Dark Ties" -> "yakuza kiwami 3"."""
     return norm(SUBTITLE_RE.split(title, maxsplit=1)[0])
 
 
 def same_game(cand: str, known: str, loose: bool = False) -> bool:
-    """Stesso titolo normalizzato. Con loose=True vale anche il titolo della piattaforma con un sottotitolo in più
-    separato da ":", "&", " - " ("Yakuza Kiwami 3 & Dark Ties" ~ "yakuza kiwami 3"). Mai il contrario, né senza
-    separatore: "The Stanley Parable" ≠ "...: Ultra Deluxe", "God of War" ≠ "God of War Ragnarök"."""
+    """Same normalized title. With loose=True the platform title may also carry an extra subtitle after
+    ":", "&", " - " ("Yakuza Kiwami 3 & Dark Ties" ~ "yakuza kiwami 3"). Never the other way round, and never
+    without a separator: "The Stanley Parable" != "...: Ultra Deluxe", "God of War" != "God of War Ragnarök"."""
     a, b = norm(cand), norm(known)
     if not a or not b:
         return False
@@ -193,12 +194,12 @@ def same_game(cand: str, known: str, loose: bool = False) -> bool:
 
 
 def link_existing(uid: int):
-    """Candidati nuovi che corrispondono a un gioco del registro: passano a "già nel registro" (ore e achievement
-    del registro si leggono da loro, vedi app.platform_stats).
-    Prima le corrispondenze esatte (titolo o nome IGDB); il sottotitolo vale solo per i giochi che dalla stessa
-    piattaforma non ne hanno già una esatta (MGS V: The Phantom Pain sì, Ground Zeroes no)."""
+    """New candidates that match a game in the log become "already in the log" (the log reads hours and
+    achievements from them, see app.platform_stats).
+    Exact matches first (title or IGDB name); the subtitle rule only applies to games that do not already have
+    an exact match from the same platform (MGS V: The Phantom Pain yes, Ground Zeroes no)."""
     with db() as con:
-        exact, loose = {}, {}   # titolo normalizzato -> id del gioco (il primo inserito vince)
+        exact, loose = {}, {}   # normalized title -> game id (the first one inserted wins)
         for g in con.execute("SELECT id, title, igdb_name FROM games WHERE user_id=? ORDER BY id", (uid,)):
             for t in (g["title"], g["igdb_name"]):
                 if t:
@@ -211,13 +212,13 @@ def link_existing(uid: int):
         todo = con.execute("SELECT id, title, source FROM candidates WHERE user_id=? AND status='new' AND game_id IS NULL",
                            (uid,)).fetchall()
         links = []
-        for c in todo:   # prima passata: titolo identico
+        for c in todo:   # first pass: identical title
             gid = exact.get(norm(c["title"]))
             if gid:
                 links.append((gid, c["id"]))
                 taken.add((gid, c["source"]))
         linked = {cid for _, cid in links}
-        for c in todo:   # seconda passata: sottotitolo in più, se quel gioco non ha già un candidato da questa fonte
+        for c in todo:   # second pass: extra subtitle, if that game has no candidate from this source yet
             gid = c["id"] not in linked and loose.get(head(c["title"]))
             if gid and (gid, c["source"]) not in taken:
                 links.append((gid, c["id"]))
@@ -237,7 +238,7 @@ def steam_get(client, key, path, **params):
 
 
 def steam_id(client, key, sid) -> str:
-    sid = sid.strip().rstrip("/").split("/")[-1]   # accetta anche l'URL del profilo
+    sid = sid.strip().rstrip("/").split("/")[-1]   # also accepts the profile URL
     if sid.isdigit() and len(sid) == 17:
         return sid
     r = steam_get(client, key, "ISteamUser/ResolveVanityURL/v1/", vanityurl=sid).json()["response"]
@@ -288,7 +289,7 @@ def sync_steam(uid, cr):
     return msg("steam_ok", n=len(owned), f=fetched)
 
 
-# --- Xbox (OpenXBL, piano gratuito: 150 richieste/ora) ---------------------------
+# --- Xbox (OpenXBL, free plan: 150 requests/hour) --------------------------------
 
 def xbl_get(client, key, path):
     r = client.get(f"https://xbl.io/api/v2/{path}", headers={"X-Authorization": key, "Accept": "application/json",
@@ -302,11 +303,11 @@ def xbl_get(client, key, path):
     if rem is not None and rem.isdigit() and int(rem) < 3:
         raise RateLimited("rate_xbox")
     j = r.json()
-    return j.get("content", j) if isinstance(j, dict) else j   # OpenXBL incapsula in {"content", "code"}
+    return j.get("content", j) if isinstance(j, dict) else j   # OpenXBL wraps responses in {"content", "code"}
 
 
 def xbox_platform(devices) -> str:
-    """devices = dove il gioco può girare, non dove è stato giocato: proposta modificabile alla conferma."""
+    """devices = where the game can run, not where it was played: a suggestion the user can change."""
     devices = set(devices or [])
     if devices & {"PC", "Win32"}:
         return "Game Pass"
@@ -314,7 +315,7 @@ def xbox_platform(devices) -> str:
 
 
 def xbox_minutes(client, key, xuid: str, title_ids: list[str]) -> dict:
-    """titleId -> minuti giocati (statistica MinutesPlayed), 100 titoli per richiesta."""
+    """titleId -> minutes played (MinutesPlayed stat), 100 titles per request."""
     out = {}
     for i in range(0, len(title_ids), 100):
         body = {"xuids": [xuid], "groups": [],
@@ -338,7 +339,7 @@ def sync_xbox(uid, cr):
         summary = xbl_get(client, key, "achievements")
         titles = summary.get("titles", [])
         have = known(uid, "xbox")
-        # ore di tutti i titoli in poche richieste, prima degli achievement (che possono fermarsi al limite orario)
+        # hours for every title in a few requests, before the achievements (which may stop at the hourly limit)
         minutes = xbox_minutes(client, key, summary.get("xuid"), [str(t.get("titleId")) for t in titles if t.get("titleId")])
         hours_of = lambda ext: round(minutes[ext] / 60, 1) if ext in minutes else None
         for ext in have:
@@ -385,7 +386,7 @@ def sync_xbox(uid, cr):
     return msg("xbox_ok", n=len(titles), f=fetched)
 
 
-# --- PSN (psnawp: NPSSO -> token che si rinnova; 1 richiesta ogni 3 s) ------------
+# --- PSN (psnawp: NPSSO -> self-refreshing token; 1 request every 3 s) -----------
 
 PSN_PLATFORMS = ["PS5", "PS4", "PS3", "PSVITA", "PSPC"]
 PSN_LABEL = {"PSVITA": "PS Vita", "PSPC": "PC"}
@@ -398,7 +399,7 @@ def psn_client(uid, npsso):
         with open(path) as f:
             token = json.load(f)
         if token.get("npsso_hash") != hash_npsso(npsso):
-            token = None          # NPSSO cambiato nelle impostazioni: ripartire da quello
+            token = None          # NPSSO changed in the settings: start again from it
     return PSNAWP(npsso, token_response=token and token["token"])
 
 
@@ -424,7 +425,7 @@ def sync_psn(uid, cr):
         npsso = cr["psn_npsso"]
         psn = psn_client(uid, npsso)
         me = psn.me()
-        # ore di gioco (solo PS4/PS5), abbinate per titolo
+        # play time (PS4/PS5 only), matched by title
         stats = {}
         for s in me.title_stats():
             if s.name:
@@ -452,7 +453,7 @@ def sync_psn(uid, cr):
                         a = {"name": tr.trophy_name, "desc": tr.trophy_detail, "date": day(tr.earned_date_time)}
                         if tr.trophy_type == TrophyType.PLATINUM:
                             plat_t = a
-                        elif tr.trophy_group_id in (None, "default"):   # niente DLC per l'indizio di fine
+                        elif tr.trophy_group_id in (None, "default"):   # no DLC for the ending hint
                             achs.append(a)
             fetched += 1
             sig, label, sdate = end_signal(achs, t.title_name or "", 0, plat_t)
@@ -473,14 +474,14 @@ def sync_psn(uid, cr):
 
 
 
-# --- orchestrazione ------------------------------------------------------------
+# --- orchestration -------------------------------------------------------------
 
 SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn}
 SCHEDULED = ("steam", "xbox", "psn")
 
 
 def run(uid: int, source: str) -> bool:
-    """Esegue una sincronizzazione se non è già in corso. Ritorna False se era già in corso."""
+    """Run a sync unless one is already running. Returns False if it was already running."""
     with _locks_guard:
         lock = _locks.setdefault((uid, source), threading.Lock())
     if not lock.acquire(blocking=False):
@@ -492,8 +493,8 @@ def run(uid: int, source: str) -> bool:
         set_state(uid, source, "partial", msg(e.key, **e.params))
     except SyncError as e:
         set_state(uid, source, "error", msg(e.key, **e.params))
-    except Exception as e:   # noqa: BLE001 - l'errore va mostrato nell'app, non deve fermare lo scheduler
-        log.exception("sync %s utente %s", source, uid)
+    except Exception as e:   # noqa: BLE001 - show the error in the app, never stop the scheduler
+        log.exception("sync %s user %s", source, uid)
         set_state(uid, source, "error", msg("raw", text=str(e)[:500]))
     finally:
         lock.release()
@@ -505,7 +506,7 @@ def run_async(uid: int, source: str):
 
 
 def scheduler():
-    """Ogni ora, per ogni utente: rifà le fonti configurate rimaste a metà (limite API) e una volta al giorno tutte."""
+    """Every hour, for every user: resume sources stopped halfway (API limit), and run all of them once a day."""
     time.sleep(60)
     while True:
         with db() as con:
@@ -524,6 +525,6 @@ def scheduler():
 
 
 def start_scheduler():
-    with db() as con:   # un riavvio a metà sincronizzazione lascia "running": non è più vero
+    with db() as con:   # a restart during a sync leaves "running" behind: no longer true
         con.execute("UPDATE sync_state SET status='error', message=? WHERE status='running'", (msg("restart"),))
     threading.Thread(target=scheduler, daemon=True).start()

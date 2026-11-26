@@ -1,4 +1,4 @@
-"""Database SQLite condiviso da app, import e connettori."""
+"""SQLite database shared by the app, the importer and the connectors."""
 import hashlib
 import os
 import re
@@ -19,17 +19,17 @@ CREATE TABLE IF NOT EXISTS users (
     pw_hash      TEXT NOT NULL,
     is_admin     INTEGER NOT NULL DEFAULT 0,
     lang         TEXT NOT NULL DEFAULT 'en',
-    api_token    TEXT,              -- sha256 del token per Homepage (sola lettura di /api/stats)
+    api_token    TEXT,              -- sha256 of the dashboard token (read-only /api/stats)
     created_at   TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    token        TEXT PRIMARY KEY,  -- sha256 del cookie
+    token        TEXT PRIMARY KEY,  -- sha256 of the cookie
     user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at   TEXT NOT NULL
 );
 
--- Credenziali dei connettori, per utente: steam_id, steam_key, xbl_key, psn_npsso
+-- Connector credentials, per user: steam_id, steam_key, xbl_key, psn_npsso
 CREATE TABLE IF NOT EXISTS credentials (
     user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     key          TEXT NOT NULL,
@@ -44,15 +44,15 @@ CREATE TABLE IF NOT EXISTS games (
     platform     TEXT NOT NULL,
     emulated     INTEGER NOT NULL DEFAULT 0,
     completed_on TEXT,              -- YYYY-MM-DD
-    rating       REAL,              -- 0-10, passi da 0.5
-    hours        REAL,              -- ore giocate (dalle piattaforme, se note)
+    rating       REAL,              -- 0-10, in 0.5 steps
+    hours        REAL,              -- hours played, entered by hand (platform hours come from candidates)
     notes        TEXT,
     igdb_id      INTEGER,
     igdb_name    TEXT,
     release_year INTEGER,
-    cover        TEXT,              -- nome file in /data/covers
-    match_score  REAL,              -- affidabilità dell'abbinamento automatico (1 = certo)
-    match_manual INTEGER NOT NULL DEFAULT 0,  -- 1 = scelto a mano: l'abbinamento automatico non lo tocca
+    cover        TEXT,              -- file name in /data/covers
+    match_score  REAL,              -- confidence of the automatic IGDB match (1 = certain)
+    match_manual INTEGER NOT NULL DEFAULT 0,  -- 1 = picked by hand: automatic matching leaves it alone
     source       TEXT NOT NULL DEFAULT 'manual',
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -60,24 +60,24 @@ CREATE TABLE IF NOT EXISTS games (
 CREATE INDEX IF NOT EXISTS games_completed ON games(completed_on);
 CREATE INDEX IF NOT EXISTS games_user ON games(user_id);
 
--- Giochi trovati sulle piattaforme (Steam, Xbox, PSN): da confermare o scartare nell'app
+-- Games found on the platforms (Steam, Xbox, PSN): confirmed or dismissed in the app
 CREATE TABLE IF NOT EXISTS candidates (
     id           INTEGER PRIMARY KEY,
     user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
     source       TEXT NOT NULL,     -- steam | xbox | psn
     ext_id       TEXT NOT NULL,     -- appid / titleId / npCommunicationId
     title        TEXT NOT NULL,
-    platform     TEXT NOT NULL,     -- proposta per il registro (Steam, Game Pass, Xbox, PS5…)
+    platform     TEXT NOT NULL,     -- suggested platform for the log (Steam, Game Pass, Xbox, PS5…)
     image_url    TEXT,
     hours        REAL,
     ach_done     INTEGER,
     ach_total    INTEGER,
     first_played TEXT,
     last_played  TEXT,
-    signal       TEXT,              -- story | platinum | 100 | NULL (nessun indizio di fine)
-    signal_label TEXT,              -- nome dell'achievement/trofeo usato come indizio
+    signal       TEXT,              -- story | platinum | 100 | last | NULL (no ending hint)
+    signal_label TEXT,              -- name of the achievement/trophy used as the hint
     signal_date  TEXT,              -- YYYY-MM-DD
-    fingerprint  TEXT,              -- se non cambia, il dettaglio achievement non viene riscaricato
+    fingerprint  TEXT,              -- if unchanged, achievements are not downloaded again
     status       TEXT NOT NULL DEFAULT 'new',   -- new | confirmed | dismissed
     game_id      INTEGER REFERENCES games(id) ON DELETE SET NULL,
     updated_at   TEXT NOT NULL,
@@ -89,15 +89,15 @@ CREATE TABLE IF NOT EXISTS sync_state (
     source   TEXT NOT NULL,
     last_run TEXT,
     last_ok  TEXT,
-    status   TEXT,                  -- ok | running | error | partial (limite API: riprende alla prossima ora)
-    message  TEXT,                  -- JSON {"k": chiave del testo, "p": parametri} tradotto dalla pagina
+    status   TEXT,                  -- ok | running | error | partial (API rate limit: resumes next hour)
+    message  TEXT,                  -- JSON {"k": text key, "p": params}, translated by the page
     PRIMARY KEY (user_id, source)
 );
 """
 
 MIGRATIONS = {"games": (("match_score", "REAL"), ("match_manual", "INTEGER NOT NULL DEFAULT 0"), ("hours", "REAL"),
                         ("user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE"))}
-# tabelle da ricostruire per aggiungere user_id alla chiave (novembre 2026, multiutente)
+# tables rebuilt to add user_id to their key (multi-user migration)
 REBUILD = ("candidates", "sync_state")
 
 
@@ -115,7 +115,7 @@ def db():
 
 def init_db():
     os.makedirs(COVERS, exist_ok=True)
-    con = sqlite3.connect(DB, timeout=30)   # niente foreign_keys durante le ricostruzioni
+    con = sqlite3.connect(DB, timeout=30)   # no foreign_keys while rebuilding
     try:
         old = [t for t in REBUILD if con.execute("SELECT 1 FROM sqlite_master WHERE name=?", (t,)).fetchone()
                and "user_id" not in {r[1] for r in con.execute(f"PRAGMA table_info({t})")}]
@@ -127,7 +127,7 @@ def init_db():
             if "user_id" not in have:
                 con.execute("ALTER TABLE games ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
         con.executescript(SCHEMA)
-        for t in old:   # i dati esistenti restano senza utente: li prende il primo admin (vedi assign_orphans)
+        for t in old:   # existing rows have no user yet: the first admin gets them (see assign_orphans)
             cols = ", ".join(r[1] for r in con.execute(f"PRAGMA table_info({t}_old)"))
             con.execute(f"INSERT INTO {t} ({cols}) SELECT {cols} FROM {t}_old")
             con.execute(f"DROP TABLE {t}_old")
@@ -143,12 +143,12 @@ def init_db():
 
 
 def assign_orphans(con, uid: int):
-    """Dati di prima del multiutente (user_id NULL) al primo admin."""
+    """Give rows from before multi-user (user_id NULL) to the first admin."""
     for t in ("games", "candidates", "sync_state"):
         con.execute(f"UPDATE {t} SET user_id=? WHERE user_id IS NULL", (uid,))
 
 
-# --- password e token -------------------------------------------------------------
+# --- passwords and tokens ---------------------------------------------------------
 
 def hash_pw(pw: str) -> str:
     salt = secrets.token_bytes(16)
@@ -177,23 +177,23 @@ ROMAN = {"ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "vii
 
 
 def norm(s: str) -> str:
-    """Titolo normalizzato per confronti: minuscolo, senza accenti/punteggiatura/marchi, numeri romani in cifre."""
-    s = re.sub("[\u2122\u00ae\u00a9]", "", s)   # marchi
+    """Title normalized for comparisons: lowercase, no accents/punctuation/trademarks, roman numerals as digits."""
+    s = re.sub("[\u2122\u00ae\u00a9]", "", s)   # trademarks
     s = unicodedata.normalize("NFKD", s.replace("&", " and ")).encode("ascii", "ignore").decode()
     s = re.sub(r"['’´`]", "", s.lower())
     return " ".join(ROMAN.get(w, w) for w in re.sub(r"[^a-z0-9]+", " ", s).split())
 
 
 if __name__ == "__main__":
-    # Password dimenticata: docker compose exec -it games python store.py reset-password <utente>
+    # Forgotten password: docker compose exec -it epilogg python store.py reset-password <username>
     import getpass
     import sys
     if len(sys.argv) != 3 or sys.argv[1] != "reset-password":
-        sys.exit("uso: python store.py reset-password <utente>")
-    pw = getpass.getpass("Nuova password (almeno 8 caratteri): ")
+        sys.exit("usage: python store.py reset-password <username>")
+    pw = getpass.getpass("New password (at least 8 characters): ")
     if len(pw) < 8:
-        sys.exit("troppo corta")
+        sys.exit("too short")
     with db() as con:
         n = con.execute("UPDATE users SET pw_hash=? WHERE username=?", (hash_pw(pw), sys.argv[2])).rowcount
         con.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username=?)", (sys.argv[2],))
-    print("fatto" if n else "utente non trovato")
+    print("done" if n else "user not found")

@@ -1,0 +1,18 @@
+services:
+  epilogg:
+    image: ghcr.io/chop01/epilogg:latest
+    container_name: epilogg
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data          # games.db + covers; must be writable by uid 1000
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m         # psnawp keeps its rate limiter state here
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m

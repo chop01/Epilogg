@@ -1,8 +1,8 @@
-"""Import una tantum del vecchio foglio Excel (colonne A-D: Data, Titolo, piattaforma, voto).
+"""One-off import of a spreadsheet (columns A-D: date, title, platform, rating; first row = header).
 
-Uso: docker compose run --rm -v /mnt/games/giochi.xlsx:/import/giochi.xlsx:ro games \
-        python /app/import_xlsx.py /import/giochi.xlsx [utente]   (default: il primo admin)
-Rilanciabile: salta le righe già presenti (stesso titolo e stessa data).
+Usage: docker compose run --rm -v /path/games.xlsx:/import/games.xlsx:ro epilogg \
+        python /app/import_xlsx.py /import/games.xlsx [username]   (default: the first admin)
+Can be run again: rows already present (same title and date) are skipped.
 """
 import sys
 from datetime import datetime
@@ -11,7 +11,7 @@ import openpyxl
 
 from store import db, init_db, now
 
-# piattaforma nel foglio -> nome nell'app; "(emulato)" finisce nelle note
+# platform in the sheet -> name in the app; "(emulated)" goes into the notes
 PLATFORMS = {"steam": "Steam", "pc": "PC", "gamepass": "Game Pass", "switch": "Switch",
              "ps5": "PS5", "ps4": "PS4", "ps3": "PS3", "ps2": "PS2", "psx": "PS1", "gba": "GBA"}
 
@@ -31,7 +31,7 @@ def main(path, username=None):
         u = con.execute("SELECT id FROM users WHERE username=?" if username else
                         "SELECT id FROM users WHERE is_admin=1 ORDER BY id", (username,) if username else ()).fetchone()
         if not u:
-            sys.exit("utente non trovato (al primo avvio crearlo dalla pagina)")
+            sys.exit("user not found (on the first start, create it from the web page)")
         uid = u["id"]
         for r in ws.iter_rows(min_row=2, max_col=4, values_only=True):
             when, title, plat, rating = r
@@ -45,9 +45,9 @@ def main(path, username=None):
                 continue
             con.execute("INSERT INTO games (user_id, title, platform, notes, completed_on, rating, source, created_at,"
                         " updated_at) VALUES (?,?,?,?,?,?, 'excel', ?, ?)",
-                        (uid, title.strip(), p, "Emulato" if emu else None, d, rating, now(), now()))
+                        (uid, title.strip(), p, "Emulated" if emu else None, d, rating, now(), now()))
             added += 1
-    print(f"importati {added}, già presenti {skipped}")
+    print(f"imported {added}, already present {skipped}")
 
 
 if __name__ == "__main__":

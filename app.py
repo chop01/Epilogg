@@ -1,11 +1,11 @@
-"""Roll Credits — registro dei giochi completati: SQLite + API JSON + pagina unica (static/index.html).
+"""Epilogg — log of the games you finished: SQLite + JSON API + a single page (static/index.html).
 
-Più utenti: ognuno ha registro, candidati e credenziali delle piattaforme suoi. Il primo utente (creato dalla
-pagina al primo avvio) è admin e crea gli altri. Sessione con cookie; /api/stats accetta anche un token
-(per il widget di Homepage).
+Multi-user: each user has their own log, candidates and platform credentials. The first user (created from
+the page on the first start) is an admin and creates the others. Cookie sessions; /api/stats also accepts a
+token (for dashboard widgets).
 
-Copertine e metadati da IGDB (serve un'app Twitch: IGDB_CLIENT_ID / IGDB_CLIENT_SECRET).
-Le copertine vengono scaricate in /data/covers, così la pagina non dipende da servizi esterni.
+Covers and metadata from IGDB (needs a Twitch app: IGDB_CLIENT_ID / IGDB_CLIENT_SECRET).
+Covers are downloaded to /data/covers, so the page does not depend on external services.
 """
 import csv
 import io
@@ -51,7 +51,7 @@ def igdb_query(endpoint: str, body: str):
         _token.update(value=j["access_token"], exp=time.time() + j["expires_in"])
     r = httpx.post(f"https://api.igdb.com/v4/{endpoint}", content=body, timeout=15, headers={
         "Client-ID": IGDB_ID, "Authorization": f"Bearer {_token['value']}"})
-    if r.status_code == 429:  # limite 4 richieste/s
+    if r.status_code == 429:  # limit: 4 requests/s
         time.sleep(1)
         return igdb_query(endpoint, body)
     r.raise_for_status()
@@ -62,8 +62,8 @@ IGDB_FIELDS = "fields name,first_release_date,cover.image_id,platforms.abbreviat
 
 
 def igdb_search(q: str, limit: int = 10, contains: bool = False):
-    """Ricerca testuale di IGDB più una per nome (esatto, o "contiene" se contains=True): la ricerca testuale
-    non trova titoli corti con caratteri accentati ("Öoo" -> solo "Ooo" e "oOo: Ascension")."""
+    """IGDB text search plus a search by name (exact, or "contains" with contains=True): text search alone
+    misses short titles with accented letters ("Öoo" -> only "Ooo" and "oOo: Ascension")."""
     q = q.replace('"', "").strip()
     by_name = f'*"{q}"*' if contains else f'"{q}"'
     rows = igdb_query("games", f'{IGDB_FIELDS} where name ~ {by_name} & version_parent = null; limit {limit};')
@@ -106,7 +106,7 @@ def apply_match(game_id: int, m: dict, manual: bool = False, score: float | None
                     (m["id"], m["name"], m["year"], cover, 1.0 if manual else score, int(manual), now(), game_id))
 
 
-# piattaforma dell'app -> abbreviazioni IGDB compatibili (bonus nell'abbinamento)
+# app platform -> compatible IGDB abbreviations (a bonus when matching)
 PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S", "XONE"},
                  "PS5": {"PS5"}, "PS4": {"PS4"}, "PS3": {"PS3"}, "PS2": {"PS2"}, "PS1": {"PS1"},
                  "GBA": {"GBA"}, "Switch": {"Switch", "NS2", "Switch 2"},
@@ -117,7 +117,7 @@ PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S"
 def similarity(title: str, name: str) -> float:
     t = norm(title)
     nums = lambda x: {w for w in x.split() if w.isdigit()}
-    # numeri diversi = altro capitolo della serie (Spider-Man vs Spider-Man 2)
+    # different numbers = another entry in the series (Spider-Man vs Spider-Man 2)
     penalty = 0.75 if nums(t) != nums(norm(name)) and not (nums(t) <= nums(norm(name.split(":")[0]))) else 1.0
     best = 0.0
     for n in {norm(name), norm(name.split(":")[0]), norm(name.split(" - ")[0])}:
@@ -130,7 +130,7 @@ def score(title: str, platform: str, r: dict) -> float:
     s = similarity(title, r["name"])
     if PLATFORM_HINT.get(platform, set()) & set(r["platforms"]):
         s += 0.08
-    s += 0.1 * min(r["pop"], 300) / 300   # a parità di nome, il gioco più noto
+    s += 0.1 * min(r["pop"], 300) / 300   # same name: prefer the better-known game
     if r["dlc"]:
         s -= 0.15
     if not r["cover_id"]:
@@ -139,15 +139,15 @@ def score(title: str, platform: str, r: dict) -> float:
 
 
 def find_match(title: str, platform: str):
-    """Miglior risultato IGDB e la sua somiglianza col titolo (0-1).
-    Se la ricerca diretta non convince (refusi), riprova togliendo una parola per volta."""
-    # 50 risultati: per titoli molto portati ("Prince of Persia") i primi 10 sono tutti versioni anni '90
+    """Best IGDB result and its similarity to the title (0-1).
+    If the direct search is not convincing (typos), retry dropping one word at a time."""
+    # 50 results: for much-used titles ("Prince of Persia") the first 10 are all '90s versions
     cands = {r["id"]: r for r in igdb_search(title, 50)}
     best = max(cands.values(), key=lambda r: score(title, platform, r), default=None)
     words = title.split()
     if (not best or similarity(title, best["name"]) < 0.85) and len(words) >= 2:
         for i in range(min(len(words), 6)):
-            time.sleep(0.25)   # IGDB: max 4 richieste al secondo
+            time.sleep(0.25)   # IGDB: at most 4 requests per second
             for r in igdb_search(" ".join(words[:i] + words[i + 1:])):
                 cands.setdefault(r["id"], r)
         best = max(cands.values(), key=lambda r: score(title, platform, r), default=None)
@@ -165,7 +165,7 @@ class GameIn(BaseModel):
     completed_on: date | None = None
     rating: float | None = Field(default=None, ge=0, le=10)
     notes: str | None = Field(default=None, max_length=5000)
-    hours: float | None = Field(default=None, ge=0, le=100000)   # manuale: ha la precedenza sulle piattaforme
+    hours: float | None = Field(default=None, ge=0, le=100000)   # entered by hand: takes precedence over the platforms
 
     @field_validator("rating")
     @classmethod
@@ -184,16 +184,16 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="Roll Credits", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="Epilogg", docs_url=None, redoc_url=None, lifespan=lifespan)
 init_db()
 
 
-# --- utenti e sessioni ------------------------------------------------------------
+# --- users and sessions -----------------------------------------------------------
 
-COOKIE = "rc_session"
+COOKIE = "epilogg_session"
 SESSION_DAYS = 180
-OPEN_PATHS = ("/api/auth/", "/api/stats")   # il resto di /api e /covers richiede la sessione
-_fails: dict = {}   # ip -> [orari dei login sbagliati] (anti forza bruta, in memoria)
+OPEN_PATHS = ("/api/auth/", "/api/stats")   # the rest of /api and /covers needs a session
+_fails: dict = {}   # ip -> [times of failed logins] (brute-force guard, in memory)
 
 
 def session_user(request: Request):
@@ -240,7 +240,7 @@ def start_session(request: Request, response: Response, user_id: int):
         con.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)",
                     (sha(tok), user_id, exp.isoformat(timespec="seconds")))
     response.set_cookie(COOKIE, tok, max_age=SESSION_DAYS * 86400, httponly=True,
-                        secure=request.url.scheme == "https", samesite="lax")   # via Traefik sempre https
+                        secure=request.url.scheme == "https", samesite="lax")   # https whenever the reverse proxy says so
 
 
 LANGS = ("en", "it")
@@ -267,7 +267,7 @@ def auth_state(request: Request):
 
 @app.post("/api/auth/setup")
 def setup(body: NewUser, request: Request, response: Response):
-    """Primo avvio: crea l'admin, gli assegna i dati già presenti e le credenziali del .env."""
+    """First start: create the admin and give it the existing data and the .env credentials."""
     with db() as con:
         if con.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
             raise HTTPException(409, "setup_done")
@@ -336,14 +336,14 @@ def change_password(body: PasswordIn, request: Request):
         raise HTTPException(400, "bad_password")
     with db() as con:
         con.execute("UPDATE users SET pw_hash=? WHERE id=?", (hash_pw(body.new), uid(request)))
-        # le altre sessioni (altri dispositivi) decadono
+        # sign out the other sessions (other devices)
         con.execute("DELETE FROM sessions WHERE user_id=? AND token != ?", (uid(request), sha(request.cookies[COOKIE])))
     return {"ok": True}
 
 
 @app.get("/api/me/credentials")
 def get_credentials(request: Request):
-    """Solo quali sono impostate: i valori non tornano mai alla pagina."""
+    """Only which ones are set: values never go back to the page."""
     with db() as con:
         have = {r["key"] for r in con.execute("SELECT key FROM credentials WHERE user_id=?", (uid(request),))}
     return {k: k in have for k in connectors.CRED_KEYS} | {"env_steam_key": bool(connectors.ENV_STEAM_KEY)}
@@ -351,7 +351,7 @@ def get_credentials(request: Request):
 
 @app.put("/api/me/credentials")
 def set_credentials(body: dict[str, str | None], request: Request):
-    """Chiave con stringa = nuovo valore, null o "" = cancella, chiave assente = invariata."""
+    """Key with a string = new value, null or "" = delete, missing key = unchanged."""
     with db() as con:
         for k, v in body.items():
             if k not in connectors.CRED_KEYS:
@@ -369,9 +369,9 @@ def set_credentials(body: dict[str, str | None], request: Request):
 
 @app.post("/api/me/token")
 def new_token(request: Request):
-    """Token per Homepage (legge solo /api/stats). Mostrato una volta sola."""
+    """Token for dashboards (reads /api/stats only). Shown once."""
     import secrets
-    tok = "rc_" + secrets.token_urlsafe(24)
+    tok = "eg_" + secrets.token_urlsafe(24)
     with db() as con:
         con.execute("UPDATE users SET api_token=? WHERE id=?", (sha(tok), uid(request)))
     return {"token": tok}
@@ -421,7 +421,7 @@ def reset_password(user_id: int, body: ResetIn, request: Request):
 
 @app.delete("/api/users/{user_id}", status_code=204)
 def delete_user(user_id: int, request: Request):
-    """Cancella l'utente con registro, candidati e credenziali (la pagina chiede conferma)."""
+    """Delete the user with their log, candidates and credentials (the page asks for confirmation)."""
     need_admin(request)
     if user_id == uid(request):
         raise HTTPException(400, "self_delete")
@@ -434,7 +434,7 @@ def delete_user(user_id: int, request: Request):
 
 @app.get("/api/stats")
 def stats(request: Request):
-    """Numeri per Homepage: sessione o "Authorization: Bearer <token>" creato nelle impostazioni."""
+    """Numbers for dashboards: a session or "Authorization: Bearer <token>" created in the settings."""
     u = session_user(request)
     if not u:
         h = request.headers.get("authorization", "")
@@ -459,8 +459,8 @@ def row(r: sqlite3.Row) -> dict:
 
 
 def platform_stats(con, user_id: int) -> dict:
-    """game_id -> dati del candidato collegato più adatto: stessa piattaforma del gioco, altrimenti quello con più
-    ore (un gioco può essere collegato a Steam e Xbox insieme)."""
+    """game_id -> data of the best linked candidate: same platform as the game, otherwise the one with the most
+    hours (a game can be linked to Steam and Xbox at the same time)."""
     best = {}
     for c in con.execute("SELECT c.game_id, c.source, c.platform, c.hours, c.ach_done, c.ach_total, g.platform gp"
                          " FROM candidates c JOIN games g ON g.id = c.game_id WHERE g.user_id=?", (user_id,)):
@@ -506,7 +506,7 @@ def create_game(user_id: int, g: GameIn, source: str = "manual") -> int:
             (user_id, g.title.strip(), g.platform.strip(), g.completed_on and g.completed_on.isoformat(),
              g.rating, g.notes, g.hours, source, now(), now()))
         gid = cur.lastrowid
-    if igdb_enabled():   # in background: la risposta non aspetta IGDB, la copertina compare poco dopo
+    if igdb_enabled():   # in the background: the response does not wait for IGDB, the cover shows up shortly after
         threading.Thread(target=match_new_game, args=(user_id, gid, g.title, g.platform), daemon=True).start()
     return gid
 
@@ -516,9 +516,9 @@ def match_new_game(user_id: int, gid: int, title: str, platform: str):
         m, sim = find_match(title, platform)
         if m:
             apply_match(gid, m, score=sim)
-            connectors.link_existing(user_id)   # il nome IGDB può collegare altri candidati
+            connectors.link_existing(user_id)   # the IGDB name may link more candidates
     except Exception:
-        pass  # la copertina si può abbinare dopo dalla scheda
+        pass  # the cover can be matched later from the game card
 
 
 @app.post("/api/games", status_code=201)
@@ -556,7 +556,7 @@ def delete_game(gid: int, request: Request):
 
 @app.get("/api/igdb/search")
 def search(q: str, platform: str = ""):
-    """Risultati ordinati come l'abbinamento automatico (titolo, piattaforma, popolarità), i primi 24."""
+    """Results ranked like the automatic match (title, platform, popularity), top 24."""
     return sorted(igdb_search(q, 50, contains=True), key=lambda r: score(q, platform, r), reverse=True)[:24]
 
 
@@ -576,8 +576,8 @@ def match(gid: int, m: MatchIn, request: Request):
 
 @app.post("/api/covers/auto")
 def auto_covers(request: Request, redo: bool = False):
-    """Abbina a IGDB i giochi senza abbinamento (redo=true: rifà anche quelli automatici, mai quelli scelti a mano).
-    Gli abbinamenti incerti (somiglianza < 0.85) sono da controllare nella scheda."""
+    """Match unmatched games on IGDB (redo=true: redo the automatic ones too, never those picked by hand).
+    Uncertain matches (similarity < 0.85) are flagged for checking in the game card."""
     where = "match_manual = 0" if redo else "igdb_id IS NULL"
     with db() as con:
         todo = con.execute(f"SELECT id, title, platform FROM games WHERE user_id=? AND {where}", (uid(request),)).fetchall()
@@ -596,7 +596,7 @@ def auto_covers(request: Request, redo: bool = False):
     return {"matched": done, "not_found": missing, "doubtful": doubtful}
 
 
-# --- piattaforme (Steam, Xbox, PSN) -------------------------------------------------
+# --- platforms (Steam, Xbox, PSN) ---------------------------------------------------
 
 @app.get("/api/sync")
 def sync_status(request: Request):
@@ -639,7 +639,7 @@ def confirm_candidate(cid: int, g: GameIn, request: Request):
     gid = create_game(u, g, source=c["source"])
     with db() as con:
         con.execute("UPDATE candidates SET status='confirmed', game_id=?, updated_at=? WHERE id=?", (gid, now(), cid))
-    connectors.link_existing(u)   # lo stesso gioco su un'altra piattaforma risulta già registrato
+    connectors.link_existing(u)   # the same game on another platform now shows as already logged
     return get_game(gid, request)
 
 
@@ -663,7 +663,7 @@ def export_csv(request: Request):
     for g in games_of(uid(request)):
         w.writerow([g[c] for c in cols])
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
-                             headers={"Content-Disposition": f"attachment; filename=roll-credits-{date.today()}.csv"})
+                             headers={"Content-Disposition": f"attachment; filename=epilogg-{date.today()}.csv"})
 
 
 app.mount("/covers", StaticFiles(directory=COVERS), name="covers")
