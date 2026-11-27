@@ -65,12 +65,21 @@
   .actions { display: flex; gap: 8px; justify-content: flex-end; }
   .actions .left { margin-right: auto; }
   .igdb { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 12px; }
-  .igdb .cur { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 8px; min-height: 62px; }
-  .igdb .cur img { width: 46px; border-radius: 4px; }
+  /* game dialog: cover on the left, fields and IGDB search on the right; fixed size so nothing jumps */
+  #dlg:has(form.two) { width: min(920px, 96vw); height: min(740px, calc(100dvh - 32px)); }
+  form.edit.two { height: 100%; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+                  grid-template-areas: "cover fields" "cover igdb" "actions actions"; column-gap: 22px; }
+  form.two .dcover { grid-area: cover; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); }
+  form.two .dcover img, form.two .dcover .ph { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 8px;
+                                               background: var(--panel2); display: block; }
+  form.two .dcover b { color: var(--text); }
+  form.two .dfields { grid-area: fields; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  form.two .igdb { grid-area: igdb; display: flex; flex-direction: column; min-height: 0; }
+  form.two .igdb .results { flex: 1; height: auto; min-height: 0; }
+  form.two .actions { grid-area: actions; }
   /* fixed size: the dialog must not grow and shrink with every search (results, "Searching…", images loading) */
   .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 8px;
              height: 300px; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
-  .igdb .cur img { width: 46px; height: 61px; object-fit: cover; }
   .results div { cursor: pointer; font-size: 11px; color: var(--muted); }
   .results div:hover { color: var(--text); }
   .results div.sel { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 5px; color: var(--text); }
@@ -206,6 +215,12 @@
     .meta { padding: 6px 8px 8px; }
     dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100dvh - 16px); overflow-y: auto; }
     .results { height: 230px; }
+    #dlg:has(form.two) { height: auto; }
+    form.edit.two { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
+                    grid-template-areas: "cover" "fields" "igdb" "actions"; }
+    form.two .dcover { flex-direction: row; align-items: center; }
+    form.two .dcover img, form.two .dcover .ph { width: 72px; flex: none; }
+    form.two .igdb .results { flex: none; height: 230px; }
     form.edit, .set { padding: 14px; gap: 10px; }
     .actions button { padding: 8px 12px; }
     .syncbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 0; }
@@ -451,16 +466,18 @@
 </div>
 
 <dialog id="dlg">
-  <form class="edit" id="form" method="dialog">
-    <label class="full"><span data-i18n="f_title"></span> <input name="title" required maxlength="300"></label>
-    <label><span data-i18n="f_platform"></span> <input name="platform" required list="platList" maxlength="50"></label>
-    <label><span data-i18n="f_completed"></span> <input name="completed_on" type="date"></label>
-    <label><span data-i18n="f_rating"></span> <input name="rating" inputmode="decimal" autocomplete="off" placeholder="8,5"></label>
-    <label><span data-i18n="f_hours"></span> <input name="hours" inputmode="decimal" autocomplete="off"></label>
-    <div class="full" id="platInfo" style="font-size:13px;color:var(--muted)"></div>
-    <label class="full"><span data-i18n="f_notes"></span> <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
+  <form class="edit two" id="form" method="dialog">
+    <div class="dcover" id="igdbCur"></div>
+    <div class="dfields">
+      <label class="full"><span data-i18n="f_title"></span> <input name="title" required maxlength="300"></label>
+      <label><span data-i18n="f_platform"></span> <input name="platform" required list="platList" maxlength="50"></label>
+      <label><span data-i18n="f_completed"></span> <input name="completed_on" type="date"></label>
+      <label><span data-i18n="f_rating"></span> <input name="rating" inputmode="decimal" autocomplete="off" placeholder="8,5"></label>
+      <label><span data-i18n="f_hours"></span> <input name="hours" inputmode="decimal" autocomplete="off"></label>
+      <div class="full" id="platInfo" style="font-size:13px;color:var(--muted)"></div>
+      <label class="full"><span data-i18n="f_notes"></span> <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
+    </div>
     <div class="igdb" id="igdbBox">
-      <div class="cur" id="igdbCur"></div>
       <div style="display:flex; gap:8px">
         <input id="igdbQ" data-i18n-ph="igdb_ph" style="flex:1">
         <button type="button" id="igdbGo" data-i18n="search_btn"></button>
@@ -872,9 +889,10 @@ function openDialog(g) {
   if (g) {
     $('#igdbQ').value = g.title;
     $('#igdbCur').innerHTML = g.igdb_id
-      ? `${g.cover ? `<img src="${coverUrl(g)}">` : ''}<span>${t('igdb_matched')} <b>${esc(g.igdb_name)}</b>${g.release_year ? ` (${g.release_year})` : ''}
+      ? `${g.cover ? `<img src="${coverUrl(g)}" alt="">` : '<div class="ph"></div>'}<span>${t('igdb_matched')} <b>${esc(g.igdb_name)}</b>${g.release_year ? ` (${g.release_year})` : ''}
          ${g.match_manual ? t('manual_pick') : doubtful(g) ? t('to_check') : t('automatic')}</span>`
-      : `<span>${t('not_matched')}</span>`;
+      : `<div class="ph"></div><span>${t('not_matched')}</span>`;
+    if (cfg.igdb) igdbSearch();   // alternatives already there, the current match highlighted
   }
   $('#dlg').showModal();
 }
@@ -926,12 +944,12 @@ $('#btnCancel').onclick = () => $('#dlg').close();
 $('#btnAdd').onclick = () => openDialog(null);
 
 let pick = null, userPicked = false, lastRes = [], titleTimer = null;   // new game: the IGDB match to use
-const igdbImg = id => `https://images.igdb.com/igdb/image/upload/t_cover_small/${id}.jpg`;
+const igdbImg = (id, size = 'cover_small') => `https://images.igdb.com/igdb/image/upload/t_${size}/${id}.jpg`;
 function showPick() {
   if (editing) return;
   $('#igdbCur').innerHTML = pick
-    ? `${pick.cover_id ? `<img src="${igdbImg(pick.cover_id)}">` : ''}<span>${t('igdb_will')} <b>${esc(pick.name)}</b>${pick.year ? ` (${pick.year})` : ''} ${t('igdb_change')}</span>`
-    : `<span>${t('igdb_auto')}</span>`;
+    ? `${pick.cover_id ? `<img src="${igdbImg(pick.cover_id, 'cover_big')}" alt="">` : '<div class="ph"></div>'}<span>${t('igdb_will')} <b>${esc(pick.name)}</b>${pick.year ? ` (${pick.year})` : ''} ${t('igdb_change')}</span>`
+    : `<div class="ph"></div><span>${t('igdb_auto')}</span>`;
   $$('#igdbRes [data-igdb]').forEach(d => d.classList.toggle('sel', !!pick && Number(d.dataset.igdb) === pick.id));
 }
 async function igdbSearch() {
@@ -945,6 +963,7 @@ async function igdbSearch() {
         ${r.cover_id ? `<img loading="lazy" src="${igdbImg(r.cover_id)}">` : '<span class="ph"></span>'}
         ${esc(r.name)}${r.year ? ` (${r.year})` : ''}</div>`).join('') : t('no_results');
     if (!editing && !userPicked) pick = res[0] || null;   // best ranked (title, platform, popularity)
+    if (editing) $$('#igdbRes [data-igdb]').forEach(d => d.classList.toggle('sel', Number(d.dataset.igdb) === editing.igdb_id));
     showPick();
   } catch (err) { $('#igdbRes').textContent = t('error') + err.message; }
 }
