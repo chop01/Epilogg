@@ -135,6 +135,7 @@
   .src h3 .ico { margin-right: 6px; vertical-align: -3px; }
   .src { cursor: pointer; }
   .src.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  button.logout { background: var(--bad); border-color: var(--bad); color: #1a0d0d; font-weight: 600; }
   #btnSettings.on { border-color: var(--accent); color: var(--accent); }
   .users { display: flex; flex-direction: column; gap: 6px; }
   .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
@@ -343,7 +344,6 @@
         <h2 data-i18n="s_general"></h2>
         <div class="row">
           <label><span data-i18n="language"></span><select id="setLang"><option value="en">English</option><option value="it">Italiano</option></select></label>
-          <button type="button" id="btnLogout" data-i18n="logout"></button>
         </div>
         <div class="hint" id="setWho"></div>
         <h3 data-i18n="s_password"></h3>
@@ -352,6 +352,7 @@
           <label><span data-i18n="pw_new"></span><input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
           <button type="submit" data-i18n="change"></button>
         </form>
+        <div class="row" style="margin-top:14px"><button type="button" id="btnLogout" class="logout" data-i18n="logout"></button></div>
       </section>
 
       <section data-sec="platforms" hidden>
