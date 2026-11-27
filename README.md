@@ -12,8 +12,8 @@ your log automatically.
 
 - Grid of covers with filters (year, platform, rating) and sorting
 - Hours played and achievements for every game, plus a platinum badge when everything is unlocked
-- Tabs: **Completed** (your log), **Not completed** (platform games you dismissed), **Platforms** (games to review),
-  **Stats**
+- Tabs: **Completed** (your log), **Not completed** (platform games you dismissed), **Platforms** (games to review;
+  click a platform to filter on it), **Stats**; settings on their own page (general, platforms, data, API access, users)
 - **Stats** (year in review): one year or all time, with:
   - games finished per month;
   - platforms and the rating distribution;
@@ -55,7 +55,7 @@ from outside your LAN. The session cookie is marked `Secure` whenever the proxy 
 
 ### Platform accounts
 
-Each user fills in their own accounts in ⚙ Settings → Platform accounts. Saved values are never shown
+Each user fills in their own accounts in ⚙ Settings → Platforms. Saved values are never shown
 again.
 
 | Platform | What to enter |
@@ -95,9 +95,9 @@ least `title` and `platform` columns.
 - **Duplicates**: games already in the log (same title and date) are skipped.
 - **Covers**: they are matched in the background. When the file has an `igdb_id`, that game is used as is.
 
-## Homepage widget
+## API access (Homepage and other dashboards)
 
-In ⚙ Settings → "Generate token", then:
+In ⚙ Settings → *API access* → "Generate token". The token is read-only and only reaches `/api/stats`, so you can use it in any dashboard or script. For Homepage:
 
 ```yaml
 - Epilogg:
@@ -150,4 +150,6 @@ The code is small:
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE).
+
+The platform logos come from [Simple Icons](https://simpleicons.org) (CC0). The trademarks belong to their owners and are used only to name the platform. Xbox and Nintendo asked Simple Icons to remove their logos, so Epilogg uses generic icons for them, drawn for this project.
