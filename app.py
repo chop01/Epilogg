@@ -410,6 +410,14 @@ def set_credentials(body: dict[str, str | None], request: Request):
     return get_credentials(request)
 
 
+@app.post("/api/me/notify-test")
+def notify_test(request: Request):
+    err = connectors.notify(uid(request), "test")
+    if err:
+        raise HTTPException(400, "notify_off" if err == "not_configured" else f"Telegram: {err}")
+    return {"ok": True}
+
+
 @app.post("/api/me/token")
 def new_token(request: Request):
     """Token for dashboards (reads /api/stats only). Shown once."""
@@ -493,8 +501,13 @@ def stats(request: Request):
                         " FROM games WHERE user_id=?", (y, u["id"])).fetchone()
         review = con.execute("SELECT COUNT(*) FROM candidates WHERE user_id=? AND status='new'"
                              " AND signal IN ('story', 'platinum', '100')", (u["id"],)).fetchone()[0]
+    h = connectors.health(u["id"])
+    failing = sorted(connectors.SRC_NAME.get(k, k) for k, v in h.items() if v != "ok")
     return {"total": g["total"], "year": g["year"] or 0, "avg_rating": round(g["avg"], 1) if g["avg"] else None,
-            "to_review": review}
+            "to_review": review,
+            # platforms: linked, syncing fine, failing (error or no success for 2 days) and which ones
+            "platforms": len(h), "platforms_ok": len(h) - len(failing), "platforms_failing": len(failing),
+            "failing": ", ".join(failing) or "-"}
 
 
 def row(r: sqlite3.Row) -> dict:

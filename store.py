@@ -102,12 +102,14 @@ CREATE TABLE IF NOT EXISTS sync_state (
     last_ok  TEXT,
     status   TEXT,                  -- ok | running | error | partial (API rate limit: resumes next hour)
     message  TEXT,                  -- JSON {"k": text key, "p": params}, translated by the page
+    alerted  TEXT,                  -- problem already notified on Telegram: error | stale | NULL
     PRIMARY KEY (user_id, source)
 );
 """
 
 MIGRATIONS = {"games": (("match_score", "REAL"), ("match_manual", "INTEGER NOT NULL DEFAULT 0"), ("hours", "REAL"),
-                        ("user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE"))}
+                        ("user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE")),
+              "sync_state": (("alerted", "TEXT"),)}
 # tables rebuilt to add user_id to their key (multi-user migration)
 REBUILD = ("candidates", "sync_state")
 

@@ -95,6 +95,12 @@ least `title` and `platform` columns.
 - **Duplicates**: games already in the log (same title and date) are skipped.
 - **Covers**: they are matched in the background. When the file has an `igdb_id`, that game is used as is.
 
+## Notifications
+
+⚙ Settings → *Notifications* sends a Telegram message when a platform stops syncing and another when it works again. "Stops syncing" means an error, such as an expired PlayStation NPSSO or Epic sign-in, or no successful sync for 2 days. You get one message per problem.
+
+To set it up, paste a bot token (from @BotFather) and your chat ID, then click "Send a test". The Platforms tab also shows a red dot while a platform has a problem.
+
 ## API access (Homepage and other dashboards)
 
 In ⚙ Settings → *API access* → "Generate token". The token is read-only and only reaches `/api/stats`, so you can use it in any dashboard or script. For Homepage:
@@ -112,7 +118,21 @@ In ⚙ Settings → *API access* → "Generate token". The token is read-only an
         - { field: year, label: This year }
         - { field: total, label: Total }
         - { field: to_review, label: To review }
+        - { field: platforms_failing, label: Sync errors }
 ```
+
+`/api/stats` returns these fields:
+
+| Field | What it is |
+|---|---|
+| `total` | games completed in all |
+| `year` | games completed this year |
+| `avg_rating` | average rating |
+| `to_review` | games to review |
+| `platforms` | platforms linked |
+| `platforms_ok` | linked platforms syncing fine |
+| `platforms_failing` | linked platforms with an error, or no successful sync for 2 days |
+| `failing` | names of the failing platforms, or `-` when there are none |
 
 ## Backup
 

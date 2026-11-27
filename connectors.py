@@ -31,7 +31,7 @@ log = logging.getLogger("connectors")
 ENV_STEAM_KEY = os.environ.get("STEAM_API_KEY", "")
 ENV_CREDS = {"steam_id": os.environ.get("STEAM_ID", ""), "xbl_key": os.environ.get("XBL_API_KEY", ""),
              "psn_npsso": os.environ.get("PSN_NPSSO", "")}
-CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso", "ra_user", "ra_key")   # typed in the settings
+CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso", "ra_user", "ra_key", "tg_token", "tg_chat")   # typed in the settings
 LINKED = ("gog_token", "epic_token", "nintendo_token", "ubisoft_token")   # set by signing in (gog_link / epic_link)
 
 
@@ -1094,6 +1094,125 @@ def sync_ubisoft(uid, cr):
     return msg("ubisoft_ok", n=owned, f=len(played))
 
 
+# --- notifications (Telegram, per user) -------------------------------------------
+# One message when a platform stops syncing (error, or no success for STALE_HOURS) and one when it works again;
+# the state already notified is kept in sync_state.alerted so nothing is repeated every hour.
+
+STALE_HOURS = 48
+SRC_NAME = {"steam": "Steam", "xbox": "Xbox", "psn": "PlayStation", "epic": "Epic Games", "gog": "GOG",
+            "ubisoft": "Ubisoft", "ra": "RetroAchievements", "nintendo": "Nintendo"}
+NOTE = {
+    "en": {"error": "⚠️ Epilogg — {src}: {why}", "stale": "⚠️ Epilogg — {src}: no successful sync since {when}. {why}",
+           "ok": "✅ Epilogg — {src}: syncing again.", "test": "✅ Epilogg: notifications work.",
+           "relink": "sign-in expired, link the account again in Settings → Platforms.",
+           "badkey": "the key is no longer accepted, check it in Settings → Platforms.",
+           "psn_expired": "the NPSSO has expired, generate a new one (Settings → Platforms → PlayStation).",
+           "nintendo_update": "Nintendo wants a newer app version: raise NINTENDO_PCTL_BUILD in the .env.",
+           "nintendo_nodevice": "no console paired with the Parental Controls app.",
+           "steam_private": "the Steam profile or its game details are no longer public.",
+           "unknown": "check the Platforms tab."},
+    "it": {"error": "⚠️ Epilogg — {src}: {why}", "stale": "⚠️ Epilogg — {src}: nessuna sincronizzazione riuscita dal {when}. {why}",
+           "ok": "✅ Epilogg — {src}: di nuovo a posto.", "test": "✅ Epilogg: le notifiche funzionano.",
+           "relink": "accesso scaduto, ricollega l'account in Impostazioni → Piattaforme.",
+           "badkey": "la chiave non viene più accettata, controllala in Impostazioni → Piattaforme.",
+           "psn_expired": "l'NPSSO è scaduto, generane uno nuovo (Impostazioni → Piattaforme → PlayStation).",
+           "nintendo_update": "Nintendo chiede una versione dell'app più recente: aumentare NINTENDO_PCTL_BUILD nel .env.",
+           "nintendo_nodevice": "nessuna console abbinata all'app Controllo genitori.",
+           "steam_private": "il profilo Steam o i dettagli di gioco non sono più pubblici.",
+           "unknown": "guarda la scheda Piattaforme."},
+}
+WHY = {"epic_expired": "relink", "gog_expired": "relink", "ubisoft_expired": "relink", "nintendo_expired": "relink",
+       "steam_badkey": "badkey", "xbox_badkey": "badkey", "ra_badkey": "badkey"}
+
+
+def telegram(token: str, chat: str, text: str) -> str | None:
+    """Send a message; returns None when sent, otherwise Telegram's error description."""
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", timeout=20,
+                       data={"chat_id": chat, "text": text, "disable_web_page_preview": "true"})
+        j = r.json()
+        return None if j.get("ok") else str(j.get("description") or r.status_code)[:200]
+    except (httpx.HTTPError, ValueError) as e:
+        return type(e).__name__
+
+
+def user_lang(uid) -> str:
+    with db() as con:
+        r = con.execute("SELECT lang FROM users WHERE id=?", (uid,)).fetchone()
+    return r["lang"] if r and r["lang"] in NOTE else "en"
+
+
+def notify(uid, kind, **params) -> str | None:
+    cr = creds(uid)
+    if not (cr.get("tg_token") and cr.get("tg_chat")):
+        return "not_configured"
+    text = NOTE[user_lang(uid)][kind].format(**params).strip()
+    err = telegram(cr["tg_token"], cr["tg_chat"], text)
+    if err:
+        log.warning("telegram notification for user %s failed: %s", uid, err)
+    return err
+
+
+def why(lang, message) -> str:
+    t = NOTE[lang]
+    try:
+        j = json.loads(message or "{}")
+    except ValueError:
+        return t["unknown"]
+    k = j.get("k")
+    if k == "raw":
+        return (j.get("p") or {}).get("text", "")[:200] or t["unknown"]
+    return t.get(WHY.get(k, k), t["unknown"])
+
+
+def health(uid) -> dict:
+    """configured source -> "ok" | "error" | "stale" (same rules as the alerts)."""
+    with db() as con:
+        st = {r["source"]: r for r in con.execute("SELECT * FROM sync_state WHERE user_id=?", (uid,))}
+    out = {}
+    for src, ok in configured(uid).items():
+        if not ok:
+            continue
+        r = st.get(src)
+        if not r or not r["last_ok"]:
+            out[src] = "error" if r and r["status"] == "error" else "ok"   # never synced yet: first sync pending
+            continue
+        restart = '"k": "restart"' in (r["message"] or "")
+        stale = (datetime.now() - datetime.fromisoformat(r["last_ok"])).total_seconds() > STALE_HOURS * 3600
+        out[src] = "error" if r["status"] == "error" and not restart else "stale" if stale else "ok"
+    return out
+
+
+def check_alerts(uid, source):
+    """Notify a change of health of one source: error / stale (no success for STALE_HOURS) / back to normal."""
+    with db() as con:
+        st = con.execute("SELECT * FROM sync_state WHERE user_id=? AND source=?", (uid, source)).fetchone()
+    if not st or st["status"] == "running":
+        return
+    if not configured(uid).get(source):   # unlinked: forget any old alert silently
+        if st["alerted"]:
+            with db() as con:
+                con.execute("UPDATE sync_state SET alerted=NULL WHERE user_id=? AND source=?", (uid, source))
+        return
+    restart = '"k": "restart"' in (st["message"] or "")   # interrupted by a restart: not a real problem
+    last_ok = st["last_ok"]
+    stale = not last_ok or (datetime.now() - datetime.fromisoformat(last_ok)).total_seconds() > STALE_HOURS * 3600
+    problem = "error" if st["status"] == "error" and not restart else "stale" if stale and last_ok else None
+    if problem == st["alerted"] or (problem is None and not st["alerted"]):
+        return
+    lang = user_lang(uid)
+    if problem == "error":
+        err = notify(uid, "error", src=SRC_NAME.get(source, source), why=why(lang, st["message"]))
+    elif problem == "stale":
+        when = datetime.fromisoformat(last_ok).strftime("%d/%m/%Y")
+        err = notify(uid, "stale", src=SRC_NAME.get(source, source), when=when,
+                     why=why(lang, st["message"]) if st["status"] == "error" else "")
+    else:
+        err = notify(uid, "ok", src=SRC_NAME.get(source, source))
+    if err != "not_configured":   # without Telegram the state is not remembered: once set up, open problems get sent
+        with db() as con:
+            con.execute("UPDATE sync_state SET alerted=? WHERE user_id=? AND source=?", (problem, uid, source))
+
 # --- orchestration -------------------------------------------------------------
 
 SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn, "ra": sync_ra, "gog": sync_gog, "epic": sync_epic,
@@ -1119,6 +1238,10 @@ def run(uid: int, source: str) -> bool:
         set_state(uid, source, "error", msg("raw", text=str(e)[:500]))
     finally:
         lock.release()
+    try:
+        check_alerts(uid, source)
+    except Exception:   # noqa: BLE001 - a failed notification must not break the sync
+        log.exception("alerts %s user %s", source, uid)
     return True
 
 
@@ -1151,6 +1274,11 @@ def scheduler():
                 stale = not last_ok or (datetime.now() - datetime.fromisoformat(last_ok)).total_seconds() > 20 * 3600
                 if st.get("status") == "partial" or stale:
                     run(uid, src)
+                else:
+                    try:
+                        check_alerts(uid, src)   # e.g. a keepalive that just failed
+                    except Exception:   # noqa: BLE001
+                        log.exception("alerts %s user %s", src, uid)
         time.sleep(3600)
 
 

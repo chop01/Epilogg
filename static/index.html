@@ -149,6 +149,7 @@
   .src { cursor: pointer; }
   .src.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   button.logout { background: var(--bad); border-color: var(--bad); color: #1a0d0d; font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); margin-left: 5px; vertical-align: 1px; }
   #btnSettings.on { border-color: var(--accent); color: var(--accent); }
   .users { display: flex; flex-direction: column; gap: 6px; }
   .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
@@ -278,7 +279,7 @@
 <nav class="tabs">
   <button id="tabReg" class="on" data-i18n="tab_log"></button>
   <button id="tabNc" data-i18n="tab_notdone"></button>
-  <button id="tabCand"><span data-i18n="tab_platforms"></span> <span id="nCand"></span></button>
+  <button id="tabCand"><span data-i18n="tab_platforms"></span> <span id="nCand"></span><span id="syncDot" class="dot" hidden></span></button>
   <button id="tabRv" data-i18n="tab_review"></button>
 </nav>
 
@@ -356,6 +357,7 @@
       <button data-sec="general" data-i18n="s_general"></button>
       <button data-sec="platforms" data-i18n="s_platforms"></button>
       <button data-sec="data" data-i18n="s_data"></button>
+      <button data-sec="notify" data-i18n="s_notify"></button>
       <button data-sec="api" data-i18n="s_api"></button>
       <button data-sec="users" id="navUsers" data-i18n="s_users"></button>
     </nav>
@@ -441,6 +443,17 @@
           <label class="filebtn"><input type="file" id="importFile" accept=".csv,text/csv" hidden><span data-i18n="import_btn"></span></label>
         </div>
         <div id="importOut" class="hint" hidden></div>
+      </section>
+
+      <section data-sec="notify" hidden>
+        <h2 data-i18n="s_notify"></h2>
+        <div class="hint" data-i18n-html="h_notify"></div>
+        <form class="credForm" style="display:flex;flex-direction:column;gap:10px">
+          <label><span><span data-i18n="tg_token"></span> <span class="cst" data-k="tg_token"></span></span><input name="tg_token" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
+          <label><span>Chat ID <span class="cst" data-k="tg_chat"></span></span><input name="tg_chat" autocomplete="off" placeholder="123456789"></label>
+          <div class="hint" data-i18n-html="h_tg"></div>
+          <div class="actions"><button type="button" id="btnNotifyTest" data-i18n="test_btn"></button><button type="submit" class="primary" data-i18n="save"></button></div>
+        </form>
       </section>
 
       <section data-sec="api" hidden>
@@ -560,6 +573,10 @@ const I18N = {
     paste_ubisoft: 'session copied from the console…',
     signin_btn: 'Sign in', link_btn: 'Link', unlink_btn: 'Unlink', linked_ok: 'Account linked. Syncing…', unlinked: 'Account unlinked',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ linked',
+    s_notify: 'Notifications', tg_token: 'Telegram bot token', test_btn: 'Send a test', notify_sent: 'Test message sent: check Telegram',
+    h_notify: 'A Telegram message when a platform stops syncing (an error, or no successful sync for 2 days: e.g. an expired PlayStation NPSSO) and when it works again. One message per problem, never repeated every hour.',
+    h_tg: 'Create a bot with <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (or use one you already have) and paste its token. Chat ID: send any message to the bot, then open <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> and copy <code>chat.id</code>. Save, then "Send a test".',
+    sync_problems: 'Not syncing: {l}', stale_card: '— no successful sync for over 2 days.',
     s_api: 'API access', h_api: 'A read-only token for <code>/api/stats</code>: games completed this year, in total, average rating and games to review. Use it in a dashboard (Homepage, Home Assistant…) or in your own scripts, with the header <code>Authorization: Bearer &lt;token&gt;</code>. Generating a new one replaces the old one.',
     w_steam: 'hours · achievements', w_xbox: 'hours · achievements', w_psn: 'hours (PS4/PS5) · trophies', w_nintendo: 'hours (Parental Controls)',
     w_epic: 'hours · achievements', w_gog: 'achievements', w_ubisoft: 'hours · first and last played', w_ra: 'achievements · "Beaten" awards',
@@ -579,7 +596,7 @@ const I18N = {
     err: {auth_required: 'Please sign in again', bad_login: 'Wrong username or password', too_many: 'Too many attempts: try again in 15 minutes',
       setup_done: 'Setup already done: sign in', user_exists: 'This username already exists', bad_password: 'The current password is wrong',
       admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
-      not_configured: 'Set up the account in Settings first', gog_expired: 'GOG did not accept the code: sign in again and paste the new address',
+      notify_off: 'Save the bot token and chat ID first', not_configured: 'Set up the account in Settings first', gog_expired: 'GOG did not accept the code: sign in again and paste the new address',
       epic_expired: 'Epic did not accept the code (it expires after a few minutes): sign in again',
       ubisoft_link: 'No Ubisoft session found in what you pasted: run the console command again on connect.ubisoft.com after signing in',
       nintendo_link: 'Nintendo did not accept the link: click "Sign in" again and copy the new "Select this person" link', csv_empty: 'The file has no rows',
@@ -657,6 +674,10 @@ const I18N = {
     paste_ubisoft: 'sessione copiata dalla console…',
     signin_btn: 'Accedi', link_btn: 'Collega', unlink_btn: 'Scollega', linked_ok: 'Account collegato. Sincronizzo…', unlinked: 'Account scollegato',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ collegato',
+    s_notify: 'Notifiche', tg_token: 'Token del bot Telegram', test_btn: 'Invia prova', notify_sent: 'Messaggio di prova inviato: guarda Telegram',
+    h_notify: 'Un messaggio Telegram quando una piattaforma smette di sincronizzarsi (un errore, o nessuna sincronizzazione riuscita da 2 giorni: per esempio l\'NPSSO PlayStation scaduto) e quando torna a posto. Un messaggio per problema, mai ripetuto ogni ora.',
+    h_tg: 'Crea un bot con <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (o usane uno che hai già) e incolla il token. Chat ID: manda un messaggio qualsiasi al bot, poi apri <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> e copia <code>chat.id</code>. Salva, poi "Invia prova".',
+    sync_problems: 'Non si sincronizzano: {l}', stale_card: '— nessuna sincronizzazione riuscita da più di 2 giorni.',
     s_api: 'Accesso API', h_api: 'Token in sola lettura per <code>/api/stats</code>: giochi completati quest\'anno, in totale, voto medio e giochi da valutare. Si usa in una dashboard (Homepage, Home Assistant…) o in script tuoi, con l\'intestazione <code>Authorization: Bearer &lt;token&gt;</code>. Generarne uno nuovo sostituisce il vecchio.',
     w_steam: 'ore · achievement', w_xbox: 'ore · achievement', w_psn: 'ore (PS4/PS5) · trofei', w_nintendo: 'ore (Controllo genitori)',
     w_epic: 'ore · achievement', w_gog: 'achievement', w_ubisoft: 'ore · prima e ultima partita', w_ra: 'achievement · premi "Beaten"',
@@ -676,7 +697,7 @@ const I18N = {
     err: {auth_required: 'Accedi di nuovo', bad_login: 'Nome utente o password sbagliati', too_many: 'Troppi tentativi: riprova tra 15 minuti',
       setup_done: 'Configurazione già fatta: accedi', user_exists: 'Questo nome utente esiste già', bad_password: 'La password attuale è sbagliata',
       admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
-      not_configured: "Configura prima l'account nelle Impostazioni", gog_expired: "GOG non ha accettato il codice: accedi di nuovo e incolla il nuovo indirizzo",
+      notify_off: 'Salva prima il token del bot e il chat ID', not_configured: "Configura prima l'account nelle Impostazioni", gog_expired: "GOG non ha accettato il codice: accedi di nuovo e incolla il nuovo indirizzo",
       epic_expired: "Epic non ha accettato il codice (scade dopo pochi minuti): accedi di nuovo",
       ubisoft_link: 'Nessuna sessione Ubisoft in quello che hai incollato: riesegui il comando nella console su connect.ubisoft.com dopo l\'accesso',
       nintendo_link: 'Nintendo non ha accettato il link: premi di nuovo "Accedi" e copia il nuovo link di "Seleziona questa persona"', csv_empty: 'Il file non ha righe',
@@ -806,6 +827,7 @@ async function boot() {
   const s = await api('/api/sync');
   const n = Object.values(s).reduce((a, v) => a + (v.strong || 0), 0);
   $('#nCand').textContent = n ? `(${n})` : '';
+  markProblems(s);
   if (location.hash.startsWith('#settings')) openSettings(location.hash.split('/')[1]);   // reload on a settings page
 }
 
@@ -1143,15 +1165,26 @@ $('#rv').addEventListener('mouseleave', () => tip.style.display = 'none');
 const STRONG = new Set(['story', 'platinum', '100']);
 let cands = [], confirming = null, syncTimer = null;
 
+// a configured platform that failed (not just interrupted by a restart) or has not synced for 2 days
+const STALE_MS = 48 * 3600 * 1000;
+const isStale = v => v.configured && v.last_ok && Date.now() - new Date(v.last_ok) > STALE_MS;
+const hasProblem = v => v.configured && ((v.status === 'error' && !String(v.message).includes('"restart"')) || isStale(v));
+function markProblems(st) {
+  const bad = Object.entries(st).filter(([, v]) => hasProblem(v)).map(([k]) => SRC[k]);
+  $('#syncDot').hidden = !bad.length;
+  $('#tabCand').title = bad.length ? t('sync_problems', {l: bad.join(', ')}) : '';
+}
 async function loadSync() {
   const st = await api('/api/sync');
+  markProblems(st);
   let running = false, newCount = 0;
   $('#syncbar').innerHTML = Object.entries(st).map(([k, v]) => {
     running ||= v.status === 'running';
     newCount += v.strong || 0;
-    const cls = v.status === 'error' ? 'err' : v.status === 'partial' ? 'part' : 'msg';
+    const cls = v.status === 'error' || isStale(v) ? 'err' : v.status === 'partial' ? 'part' : 'msg';
     const when = v.last_ok ? t('last_ok', {w: new Date(v.last_ok).toLocaleString(t('locale'), {dateStyle: 'short', timeStyle: 'short'})}) : t('never');
-    const m = v.status === 'running' ? I18N[lang].sync.running : tSync(v.message);
+    const m = v.status === 'running' ? I18N[lang].sync.running : tSync(v.message)
+      + (isStale(v) ? ' ' + t('stale_card') : '');
     return `<div class="src ${$('#cSrc').value === k ? 'sel' : ''}" data-src="${k}" title="${esc(t('src_filter'))}"><h3><span>${ico(SRC_ICON[k])}${SRC[k]}</span>
         ${v.configured ? `<button data-sync="${k}" ${v.status === 'running' ? 'disabled' : ''}>${v.status === 'running' ? t('sync_running') : t('sync_btn')}</button>` : ''}</h3>
       ${v.configured
@@ -1265,12 +1298,14 @@ async function openSettings(sec = 'general') {
   setSection(sec);
 }
 function setSection(sec) {
-  if (!['general', 'platforms', 'data', 'api', 'users'].includes(sec) || (sec === 'users' && !me.is_admin)) sec = 'general';
+  if (!['general', 'platforms', 'data', 'notify', 'api', 'users'].includes(sec) || (sec === 'users' && !me.is_admin)) sec = 'general';
   $$('#setNav [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
   $$('#setView section[data-sec]').forEach(x => x.hidden = x.dataset.sec !== sec);
   history.replaceState(null, '', '#settings/' + sec);   // a settings page can be bookmarked / reloaded
 }
 $('#setNav').addEventListener('click', e => { const b = e.target.closest('[data-sec]'); if (b) setSection(b.dataset.sec); });
+// a #settings/... link opened from inside the page (no reload)
+addEventListener('hashchange', () => { if (me && location.hash.startsWith('#settings')) openSettings(location.hash.split('/')[1]); });
 let credState = {};
 const showCredState = () => {
   $$('.cst').forEach(e => { e.textContent = credState[e.dataset.k] ? t(e.dataset.k.endsWith('_token') ? 'is_linked' : 'is_set') : ''; e.className = 'cst ok'; });
@@ -1340,7 +1375,8 @@ document.addEventListener('submit', async e => {   // the key-based platforms (S
     f.reset();
     showCredState();
     toast(t('creds_saved'));
-    const src = f.closest('.pcard').dataset.src;
+    const src = f.closest('.pcard')?.dataset.src;   // none for the notifications form
+    if (!src) return;
     const st = await api('/api/sync');
     if (st[src]?.configured) await api(`/api/sync/${src}`, {method: 'POST'}).catch(() => {});
   } catch (err) { toast(t('error') + err.message, 5000); }
@@ -1362,6 +1398,10 @@ $('#importFile').addEventListener('change', async e => {
     if (r.added) [5000, 20000, 60000].forEach(ms => setTimeout(load, ms));   // covers arrive from IGDB
   } catch (err) { out.textContent = t('error') + err.message; }
 });
+$('#btnNotifyTest').onclick = async () => {
+  try { await api('/api/me/notify-test', {method: 'POST'}); toast(t('notify_sent'), 4000); }
+  catch (err) { toast(t('error') + err.message, 7000); }
+};
 $('#btnToken').onclick = async () => {
   const {token} = await api('/api/me/token', {method: 'POST'});
   me.has_token = true;
