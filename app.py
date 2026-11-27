@@ -111,7 +111,9 @@ PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S"
                  "PS5": {"PS5"}, "PS4": {"PS4"}, "PS3": {"PS3"}, "PS2": {"PS2"}, "PS1": {"PS1"},
                  "GBA": {"GBA"}, "Switch": {"Switch", "NS2", "Switch 2"},
                  "Xbox": {"XBOX", "X360", "XONE", "Series X|S"}, "Xbox 360": {"X360"},
-                 "PS Vita": {"Vita"}, "PSP": {"PSP"}}
+                 "PS Vita": {"Vita"}, "PSP": {"PSP"}, "GOG": {"PC"}, "Epic": {"PC"},
+                 "NES": {"NES"}, "SNES": {"SNES"}, "N64": {"N64"}, "Game Boy": {"GB"}, "GBC": {"GBC"}, "NDS": {"NDS"},
+                 "GameCube": {"NGC"}, "Mega Drive": {"Genesis/MegaDrive"}, "Master System": {"SMS"}}
 
 
 def similarity(title: str, name: str) -> float:
@@ -346,7 +348,44 @@ def get_credentials(request: Request):
     """Only which ones are set: values never go back to the page."""
     with db() as con:
         have = {r["key"] for r in con.execute("SELECT key FROM credentials WHERE user_id=?", (uid(request),))}
-    return {k: k in have for k in connectors.CRED_KEYS} | {"env_steam_key": bool(connectors.ENV_STEAM_KEY)}
+    return ({k: k in have for k in connectors.CRED_KEYS + connectors.LINKED}
+            | {"env_steam_key": bool(connectors.ENV_STEAM_KEY)})
+
+
+LINKS = {"gog": (connectors.gog_login_url, connectors.gog_link, "gog_token"),
+         "epic": (lambda: connectors.EPIC_LOGIN, connectors.epic_link, "epic_token")}
+
+
+class LinkIn(BaseModel):
+    code: str = Field(min_length=4, max_length=4000)
+
+
+@app.get("/api/link/{source}")
+def link_url(source: str):
+    """Sign-in page of a platform that has no API key: the user signs in there and pastes back what it shows."""
+    if source not in LINKS:
+        raise HTTPException(404, "not_found")
+    return {"url": LINKS[source][0]()}
+
+
+@app.post("/api/link/{source}")
+def link(source: str, body: LinkIn, request: Request):
+    if source not in LINKS:
+        raise HTTPException(404, "not_found")
+    try:
+        LINKS[source][1](uid(request), body.code)
+    except connectors.SyncError as e:
+        raise HTTPException(400, e.key)
+    connectors.run_async(uid(request), source)
+    return get_credentials(request)
+
+
+@app.delete("/api/link/{source}")
+def unlink(source: str, request: Request):
+    if source not in LINKS:
+        raise HTTPException(404, "not_found")
+    connectors.set_cred(uid(request), LINKS[source][2], None)
+    return get_credentials(request)
 
 
 @app.put("/api/me/credentials")

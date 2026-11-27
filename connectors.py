@@ -31,7 +31,8 @@ log = logging.getLogger("connectors")
 ENV_STEAM_KEY = os.environ.get("STEAM_API_KEY", "")
 ENV_CREDS = {"steam_id": os.environ.get("STEAM_ID", ""), "xbl_key": os.environ.get("XBL_API_KEY", ""),
              "psn_npsso": os.environ.get("PSN_NPSSO", "")}
-CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso")
+CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso", "ra_user", "ra_key")   # typed in the settings
+LINKED = ("gog_token", "epic_token")   # set by signing in (gog_link / epic_link)
 
 
 def psn_token_file(uid: int) -> str:   # PSN session token (refreshes itself)
@@ -126,7 +127,8 @@ class RateLimited(SyncError):
 def configured(uid: int) -> dict:
     c = creds(uid)
     return {"steam": bool(c.get("steam_key") and c.get("steam_id")), "xbox": bool(c.get("xbl_key")),
-            "psn": bool(c.get("psn_npsso"))}
+            "psn": bool(c.get("psn_npsso")), "ra": bool(c.get("ra_user") and c.get("ra_key")),
+            "gog": bool(c.get("gog_token")), "epic": bool(c.get("epic_token"))}
 
 
 def set_state(uid, source, status, message=None, ok=False):
@@ -474,10 +476,265 @@ def sync_psn(uid, cr):
 
 
 
+# --- RetroAchievements (official Web API: username + web API key) ----------------
+
+RA_API = "https://retroachievements.org/API/"
+# RA console name -> platform name in the log (others are kept as RA names them)
+RA_PLATFORM = {"NES/Famicom": "NES", "SNES/Super Famicom": "SNES", "Nintendo 64": "N64", "Game Boy": "Game Boy",
+               "Game Boy Color": "GBC", "Game Boy Advance": "GBA", "Nintendo DS": "NDS", "GameCube": "GameCube",
+               "Mega Drive / Genesis": "Mega Drive", "Master System": "Master System", "PlayStation": "PS1",
+               "PlayStation 2": "PS2", "PlayStation Portable": "PSP", "Saturn": "Saturn", "Dreamcast": "Dreamcast"}
+
+
+def ra_get(client, cr, endpoint, **params):
+    r = client.get(RA_API + endpoint, params={"y": cr["ra_key"], "u": cr["ra_user"], **params})
+    if r.status_code == 429:
+        raise RateLimited("rate_ra")
+    if r.status_code in (401, 403):
+        raise SyncError("ra_badkey")
+    r.raise_for_status()
+    return r.json()
+
+
+def sync_ra(uid, cr):
+    """Every game with progress, plus the "beaten" / "mastered" awards with their dates (two kinds of request)."""
+    with httpx.Client(timeout=30) as client:
+        games, o = [], 0
+        while True:
+            j = ra_get(client, cr, "API_GetUserCompletionProgress.php", c=500, o=o)
+            games += j.get("Results") or []
+            o += 500
+            if o >= (j.get("Total") or 0):
+                break
+        beaten, mastered = {}, {}   # game id -> earliest award date
+        for a in ra_get(client, cr, "API_GetUserAwards.php").get("VisibleUserAwards") or []:
+            target = {"Game Beaten": beaten, "Mastery/Completion": mastered}.get(a.get("AwardType"))
+            if target is not None and a.get("AwardData"):
+                d = day(a.get("AwardedAt"))
+                gid = str(a["AwardData"])
+                target[gid] = min(filter(None, (target.get(gid), d)), default=None)
+        for g in games:
+            ext = str(g["GameID"])
+            done = max(g.get("NumAwarded") or 0, g.get("NumAwardedHardcore") or 0)
+            last = day(g.get("MostRecentAwardedDate"))
+            kind = g.get("HighestAwardKind") or ""
+            if beaten.get(ext) or kind.startswith("beaten"):
+                sig, label, sdate = "story", "Beaten", beaten.get(ext) or day(g.get("HighestAwardDate"))
+            elif mastered.get(ext) or kind in ("mastered", "completed"):
+                sig, label, sdate = "100", None, mastered.get(ext) or day(g.get("HighestAwardDate"))
+            elif done:
+                sig, label, sdate = "last", None, last
+            else:
+                sig = label = sdate = None
+            upsert(uid, {"source": "ra", "ext_id": ext, "title": g.get("Title") or ext,
+                         "platform": RA_PLATFORM.get(g.get("ConsoleName"), g.get("ConsoleName") or "Retro"),
+                         "image_url": "https://media.retroachievements.org" + g["ImageIcon"] if g.get("ImageIcon") else None,
+                         "hours": None, "ach_done": done, "ach_total": g.get("MaxPossible") or 0,
+                         "first_played": None, "last_played": last,
+                         "signal": sig, "signal_label": label, "signal_date": sdate,
+                         "fingerprint": f"{done}|{kind}|{last}"})
+    return msg("ra_ok", n=len(games))
+
+
+# --- shared by GOG and Epic: OAuth tokens kept in the credentials table ----------
+
+def set_cred(uid, key, value):
+    with db() as con:
+        if value is None:
+            con.execute("DELETE FROM credentials WHERE user_id=? AND key=?", (uid, key))
+        else:
+            con.execute("INSERT INTO credentials (user_id, key, value) VALUES (?,?,?) ON CONFLICT(user_id, key)"
+                        " DO UPDATE SET value=excluded.value", (uid, key, value))
+
+
+def token_of(cr, key) -> dict:
+    try:
+        return json.loads(cr.get(key) or "{}")
+    except ValueError:
+        return {}
+
+
+# --- GOG (Galaxy client login; unofficial API: library + achievements, no play time) ---
+
+GOG_CLIENT = "46899977096215655"
+GOG_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9"   # public, from the Galaxy client
+GOG_REDIRECT = "https://embed.gog.com/on_login_success?origin=client"
+
+
+def gog_login_url() -> str:
+    from urllib.parse import urlencode
+    return "https://auth.gog.com/auth?" + urlencode({"client_id": GOG_CLIENT, "redirect_uri": GOG_REDIRECT,
+                                                     "response_type": "code", "layout": "client2"})
+
+
+def gog_token(params) -> dict:
+    r = httpx.get("https://auth.gog.com/token", timeout=30,
+                  params={"client_id": GOG_CLIENT, "client_secret": GOG_SECRET, **params})
+    if r.status_code != 200 or "refresh_token" not in r.text:
+        raise SyncError("gog_expired")
+    return r.json()
+
+
+def gog_link(uid, pasted: str):
+    """pasted = the address of the page GOG shows after signing in (…on_login_success?…&code=XXX) or the code."""
+    from urllib.parse import parse_qs, urlparse
+    p = pasted.strip()
+    code = (parse_qs(urlparse(p).query).get("code") or [p])[0] if "code=" in p else p
+    t = gog_token({"grant_type": "authorization_code", "code": code, "redirect_uri": GOG_REDIRECT})
+    set_cred(uid, "gog_token", json.dumps({"refresh_token": t["refresh_token"], "user_id": t.get("user_id")}))
+
+
+def sync_gog(uid, cr):
+    t = gog_token({"grant_type": "refresh_token", "refresh_token": token_of(cr, "gog_token").get("refresh_token", "")})
+    set_cred(uid, "gog_token", json.dumps({"refresh_token": t["refresh_token"], "user_id": t.get("user_id")}))
+    h = {"Authorization": f"Bearer {t['access_token']}"}
+    with httpx.Client(timeout=30, headers=h) as client:
+        owned = client.get("https://embed.gog.com/user/data/games").json().get("owned") or []
+        info = {}
+        for i in range(0, len(owned), 50):   # titles and covers, 50 products per request (public endpoint)
+            r = client.get("https://api.gog.com/products", params={"ids": ",".join(map(str, owned[i:i + 50]))})
+            if r.status_code == 200:
+                info.update({p["id"]: p for p in r.json() if p.get("game_type", "game") == "game"})
+        fetched = 0
+        for pid, p in info.items():
+            r = client.get(f"https://gameplay.gog.com/clients/{pid}/users/{t['user_id']}/achievements")
+            if r.status_code == 429:
+                raise RateLimited("rate_gog")
+            items = r.json().get("items", []) if r.status_code == 200 else []
+            achs = [{"name": a.get("name"), "desc": a.get("description"), "date": day(a.get("date_unlocked"))}
+                    for a in items if a.get("date_unlocked")]
+            fetched += 1
+            time.sleep(0.2)
+            if not achs:   # no play time on GOG: without unlocks we cannot tell a started game from an unplayed one
+                continue
+            title = p.get("title") or str(pid)
+            sig, label, sdate = end_signal(achs, title, len(items))
+            img = (p.get("images") or {}).get("logo2x") or (p.get("images") or {}).get("icon")
+            upsert(uid, {"source": "gog", "ext_id": str(pid), "title": title, "platform": "GOG",
+                         "image_url": ("https:" + img) if img and img.startswith("//") else img,
+                         "hours": None, "ach_done": len(achs), "ach_total": len(items),
+                         "first_played": min(a["date"] for a in achs), "last_played": max(a["date"] for a in achs),
+                         "signal": sig, "signal_label": label, "signal_date": sdate,
+                         "fingerprint": str(len(achs))})
+    return msg("gog_ok", n=len(info), f=fetched)
+
+
+# --- Epic (launcher login as Legendary/Heroic do; unofficial API: library, play time, achievements) ---
+
+EPIC_CLIENT = ("34a02cf8f4414e29b15921876da36f9a", "daafbccc737745039dffe53d94fc76cf")   # public launcher client
+EPIC_OAUTH = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token"
+EPIC_LIBRARY = "https://library-service.live.use1a.on.epicgames.com/library/api/public"
+EPIC_GQL = "https://launcher.store.epicgames.com/graphql"
+EPIC_UA = "EpicGamesLauncher/17.0.0-unknown"
+EPIC_LOGIN = ("https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect"
+              "%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode")
+EPIC_ACH_DEFS = """query Achievement($sandboxId: String!, $locale: String!) { Achievement {
+  productAchievementsRecordBySandbox(sandboxId: $sandboxId, locale: $locale) { totalAchievements
+    achievements { achievement { name unlockedDisplayName unlockedDescription } } } } }"""
+EPIC_ACH_USER = """query PlayerAchievement($epicAccountId: String!, $sandboxId: String!) { PlayerAchievement {
+  playerAchievementGameRecordsBySandbox(epicAccountId: $epicAccountId, sandboxId: $sandboxId) { records {
+    totalUnlocked playerAchievements { playerAchievement { unlocked unlockDate achievementName } } } } } }"""
+
+
+def epic_token(data) -> dict:
+    r = httpx.post(EPIC_OAUTH, data={**data, "token_type": "eg1"}, auth=EPIC_CLIENT, timeout=30,
+                   headers={"User-Agent": EPIC_UA})
+    if r.status_code != 200 or "refresh_token" not in r.text:
+        raise SyncError("epic_expired")
+    return r.json()
+
+
+def epic_save(uid, t):
+    set_cred(uid, "epic_token", json.dumps({"refresh_token": t["refresh_token"], "account_id": t["account_id"],
+                                            "refresh_expires_at": t.get("refresh_expires_at")}))
+
+
+def epic_link(uid, pasted: str):
+    """pasted = the JSON Epic shows after signing in, or just its "authorizationCode"."""
+    p = pasted.strip()
+    m = re.search(r'"authorizationCode"\s*:\s*"([0-9a-f]+)"', p)
+    t = epic_token({"grant_type": "authorization_code", "code": m.group(1) if m else p.strip('"')})
+    epic_save(uid, t)
+
+
+def epic_keepalive(uid):
+    """Refresh the Epic token every hour: an unused refresh token expires after a few hours."""
+    t = epic_token({"grant_type": "refresh_token", "refresh_token": token_of(creds(uid), "epic_token")["refresh_token"]})
+    epic_save(uid, t)
+    return t
+
+
+def epic_gql(client, query, **variables):
+    r = client.post(EPIC_GQL, json={"query": query, "variables": variables})
+    return r.json().get("data") or {} if r.status_code == 200 else {}
+
+
+def sync_epic(uid, cr):
+    t = epic_keepalive(uid)
+    acc = t["account_id"]
+    h = {"Authorization": f"bearer {t['access_token']}", "User-Agent": EPIC_UA}
+    with httpx.Client(timeout=30, headers=h) as client:
+        records, cursor = [], None
+        while True:
+            r = client.get(f"{EPIC_LIBRARY}/items", params={"includeMetadata": "true", **({"cursor": cursor} if cursor else {})})
+            r.raise_for_status()
+            j = r.json()
+            records += [x for x in j.get("records", []) if x.get("sandboxType") != "PRIVATE"]
+            cursor = (j.get("responseMetadata") or {}).get("nextCursor")
+            if not cursor:
+                break
+        played = {}   # appName -> seconds
+        r = client.get(f"{EPIC_LIBRARY}/playtime/account/{acc}/all")
+        if r.status_code == 200:
+            for p in r.json():
+                played[p.get("artifactId")] = p.get("totalTime") or 0
+        have = known(uid, "epic")
+        fetched = 0
+        for rec in records:
+            ns, item, app = rec.get("namespace"), rec.get("catalogItemId"), rec.get("appName")
+            secs = played.get(app, 0)
+            if played and not secs:
+                continue   # never started (Epic gives away many games)
+            hours = round(secs / 3600, 1) if secs else None
+            fp = f"{secs // 600}"   # every 10 minutes of play counts as a change
+            if have.get(item) == fp:
+                continue
+            c = client.get(f"https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/{ns}"
+                           "/bulk/items", params={"id": item, "includeDLCDetails": "false", "country": "US", "locale": "en-US"})
+            meta = (c.json() or {}).get(item, {}) if c.status_code == 200 else {}
+            if meta.get("mainGameItem") or any(x.get("path") == "addons" for x in meta.get("categories", [])):
+                continue   # DLC
+            title = meta.get("title") or app
+            img = next((i["url"] for i in meta.get("keyImages", []) if i.get("type") in ("DieselGameBoxTall", "DieselGameBox")), None)
+            defs = epic_gql(client, EPIC_ACH_DEFS, sandboxId=ns, locale="en-US")
+            rec_defs = (defs.get("Achievement") or {}).get("productAchievementsRecordBySandbox") or {}
+            names = {a["achievement"]["name"]: a["achievement"] for a in rec_defs.get("achievements") or []}
+            user = epic_gql(client, EPIC_ACH_USER, epicAccountId=acc, sandboxId=ns)
+            urecs = ((user.get("PlayerAchievement") or {}).get("playerAchievementGameRecordsBySandbox") or {}).get("records") or []
+            achs = []
+            for pa in (urecs[0].get("playerAchievements") or []) if urecs else []:
+                a = pa.get("playerAchievement") or {}
+                if a.get("unlocked"):
+                    d = names.get(a.get("achievementName"), {})
+                    achs.append({"name": d.get("unlockedDisplayName") or a.get("achievementName"),
+                                 "desc": d.get("unlockedDescription"), "date": day(a.get("unlockDate"))})
+            total = rec_defs.get("totalAchievements") or len(names)
+            fetched += 1
+            time.sleep(0.2)
+            if not played and not achs:
+                continue   # no play time from Epic: without unlocks we cannot tell a started game from an unplayed one
+            sig, label, sdate = end_signal(achs, title, total)
+            upsert(uid, {"source": "epic", "ext_id": item, "title": title, "platform": "Epic",
+                         "image_url": img, "hours": hours, "ach_done": len(achs), "ach_total": total,
+                         "first_played": min((a["date"] for a in achs if a["date"]), default=None),
+                         "last_played": max((a["date"] for a in achs if a["date"]), default=None),
+                         "signal": sig, "signal_label": label, "signal_date": sdate, "fingerprint": fp})
+    return msg("epic_ok", n=len(records), f=fetched)
+
 # --- orchestration -------------------------------------------------------------
 
-SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn}
-SCHEDULED = ("steam", "xbox", "psn")
+SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn, "ra": sync_ra, "gog": sync_gog, "epic": sync_epic}
+SCHEDULED = tuple(SYNC)
 
 
 def run(uid: int, source: str) -> bool:
@@ -513,6 +770,13 @@ def scheduler():
             users = [r["id"] for r in con.execute("SELECT id FROM users")]
             state = {(r["user_id"], r["source"]): dict(r) for r in con.execute("SELECT * FROM sync_state")}
         for uid in users:
+            if configured(uid)["epic"]:
+                try:
+                    epic_keepalive(uid)
+                except SyncError:
+                    set_state(uid, "epic", "error", msg("epic_expired"))
+                except Exception:   # noqa: BLE001 - network hiccup: try again next hour
+                    log.warning("epic keepalive failed for user %s", uid)
             for src, ok in configured(uid).items():
                 if not ok or src not in SCHEDULED:
                     continue

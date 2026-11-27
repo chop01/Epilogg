@@ -114,6 +114,7 @@
   .set .row > label.filebtn { flex: 0 0 auto; min-width: 0; }
   .filebtn:hover, .set a button:hover { border-color: var(--accent); }
   #importOut ul { margin: 4px 0 0; padding-left: 18px; }
+  .link { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .users { display: flex; flex-direction: column; gap: 6px; }
   .users div { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .users div span { margin-right: auto; }
@@ -281,7 +282,7 @@
       <option value="dismissed" data-i18n="c_dismissed"></option>
       <option value="confirmed" data-i18n="c_confirmed"></option>
     </select>
-    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option></select>
+    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option></select>
     <select id="cSig" data-i18n-title="sig_title">
       <option value="strong" data-i18n="sig_strong"></option>
       <option value="any" data-i18n="sig_any"></option>
@@ -363,8 +364,21 @@
         <div class="hint" data-i18n-html="h_xbl"></div>
         <label><span>PlayStation NPSSO <span class="cst" data-k="psn_npsso"></span></span><input name="psn_npsso" type="password" autocomplete="off"></label>
         <div class="hint" data-i18n-html="h_psn"></div>
+        <div class="row">
+          <label><span>RetroAchievements <span data-i18n="username"></span> <span class="cst" data-k="ra_user"></span></span><input name="ra_user" autocomplete="off"></label>
+          <label><span>RetroAchievements Web API key <span class="cst" data-k="ra_key"></span></span><input name="ra_key" type="password" autocomplete="off"></label>
+        </div>
+        <div class="hint" data-i18n-html="h_ra"></div>
         <div class="actions"><button type="submit" class="primary" data-i18n="save"></button></div>
       </form>
+      <div class="link" data-src="epic"><div class="row" style="align-items:center"><b style="margin-right:auto">Epic Games <span class="cst" data-k="epic_token"></span></b>
+          <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
+        <div class="hint" data-i18n-html="h_epic"></div>
+        <div class="row"><input data-code style="flex:1;min-width:0" data-i18n-ph="paste_epic"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
+      <div class="link" data-src="gog"><div class="row" style="align-items:center"><b style="margin-right:auto">GOG <span class="cst" data-k="gog_token"></span></b>
+          <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
+        <div class="hint" data-i18n-html="h_gog"></div>
+        <div class="row"><input data-code style="flex:1;min-width:0" data-i18n-ph="paste_gog"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
     </section>
 
     <section>
@@ -442,6 +456,11 @@ const I18N = {
     h_xbl: 'Sign in at <a href="https://xbl.io" target="_blank" rel="noopener">xbl.io</a> with your Microsoft account, then "API Keys". Free plan: 150 requests/hour, the first full sync can take a few hours.',
     h_psn: 'Sign in at playstation.com, then open <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener">this page</a> and copy the value of <code>npsso</code> (64 characters). It lasts about 2 months.',
     creds_saved: 'Saved. Syncing…',
+    h_ra: 'Username and the "Web API Key" from your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">RetroAchievements settings</a>. "Beaten" awards become story-end hints with their date.',
+    h_epic: '1. "Sign in" opens Epic in a new tab. 2. After signing in you get a page of text: copy the value of <code>authorizationCode</code> (or the whole page). 3. Paste it here and click "Link" within a few minutes. Play time and achievements; unofficial API, like Heroic and Playnite use.',
+    h_gog: '1. "Sign in" opens GOG in a new tab. 2. After signing in you land on a mostly empty page: copy its whole address from the address bar (it contains <code>code=</code>). 3. Paste it here and click "Link". Achievements only (GOG does not share play time), so only games with at least one achievement show up.',
+    signin_btn: 'Sign in', link_btn: 'Link', unlink_btn: 'Unlink', linked_ok: 'Account linked. Syncing…', unlinked: 'Account unlinked',
+    paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ linked',
     s_homepage: 'Homepage widget', h_homepage: 'A read-only token for <code>/api/stats</code> (completed this year, total, to review). Generating a new one replaces the old one.',
     token_new: 'Generate token', token_regen: 'Generate a new token', revoke: 'Revoke', token_once: 'Copy it now, it will not be shown again:',
     token_revoked: 'Token revoked',
@@ -459,13 +478,18 @@ const I18N = {
     err: {auth_required: 'Please sign in again', bad_login: 'Wrong username or password', too_many: 'Too many attempts: try again in 15 minutes',
       setup_done: 'Setup already done: sign in', user_exists: 'This username already exists', bad_password: 'The current password is wrong',
       admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
-      not_configured: 'Set up the account in Settings first', csv_empty: 'The file has no rows',
+      not_configured: 'Set up the account in Settings first', gog_expired: 'GOG did not accept the code: sign in again and paste the new address',
+      epic_expired: 'Epic did not accept the code (it expires after a few minutes): sign in again', csv_empty: 'The file has no rows',
       csv_columns: 'Title and platform columns not found in the first row', csv_too_big: 'Too many rows (max 5000)',
       missing_title_platform: 'title or platform missing', bad_date: 'date not recognised'},
     sync: {steam_ok: '{n} games in library, {f} updated', xbox_ok: '{n} titles, {f} updated', psn_ok: '{n} games with trophies, {f} updated',
       rate_steam: 'Steam: too many requests, resumes in an hour', rate_xbox: 'OpenXBL: hourly limit reached, resumes in an hour',
       rate_psn: 'PSN: too many requests, resumes in an hour', steam_badkey: 'Steam: the API key is not valid',
       steam_noid: 'Steam ID "{id}" not found (use the SteamID64 or profile name)', steam_private: 'Steam does not return the library: profile and "Game details" must be public',
+      ra_ok: '{n} games with progress', gog_ok: '{n} games in library, {f} checked', epic_ok: '{n} items in library, {f} updated',
+      rate_ra: 'RetroAchievements: too many requests, resumes in an hour', rate_gog: 'GOG: too many requests, resumes in an hour',
+      ra_badkey: 'RetroAchievements: username or API key not valid', gog_expired: 'GOG: sign-in expired, link the account again in Settings',
+      epic_expired: 'Epic: sign-in expired, link the account again in Settings',
       xbox_badkey: 'OpenXBL: the API key is not valid', psn_expired: 'PSN: NPSSO expired or not valid, generate a new one in Settings',
       restart: 'interrupted by a restart', running: 'running…'},
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], locale: 'en-GB',
@@ -513,6 +537,11 @@ const I18N = {
     h_xbl: 'Accedi su <a href="https://xbl.io" target="_blank" rel="noopener">xbl.io</a> con l\'account Microsoft, poi "API Keys". Piano gratuito: 150 richieste/ora, la prima sincronizzazione completa può richiedere qualche ora.',
     h_psn: 'Accedi su playstation.com, poi apri <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener">questa pagina</a> e copia il valore di <code>npsso</code> (64 caratteri). Dura circa 2 mesi.',
     creds_saved: 'Salvato. Sincronizzo…',
+    h_ra: 'Nome utente e "Web API Key" dalle <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">impostazioni di RetroAchievements</a>. I premi "Beaten" diventano indizi di fine storia con la loro data.',
+    h_epic: '1. "Accedi" apre Epic in una nuova scheda. 2. Dopo l\'accesso compare una pagina di testo: copia il valore di <code>authorizationCode</code> (o tutta la pagina). 3. Incollalo qui e premi "Collega" entro pochi minuti. Ore giocate e achievement; API non ufficiale, la stessa di Heroic e Playnite.',
+    h_gog: '1. "Accedi" apre GOG in una nuova scheda. 2. Dopo l\'accesso arrivi su una pagina quasi vuota: copia il suo indirizzo intero dalla barra (contiene <code>code=</code>). 3. Incollalo qui e premi "Collega". Solo achievement (GOG non fornisce le ore), quindi compaiono solo i giochi con almeno un achievement.',
+    signin_btn: 'Accedi', link_btn: 'Collega', unlink_btn: 'Scollega', linked_ok: 'Account collegato. Sincronizzo…', unlinked: 'Account scollegato',
+    paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ collegato',
     s_homepage: 'Widget di Homepage', h_homepage: 'Token in sola lettura per <code>/api/stats</code> (completati quest\'anno, totale, da valutare). Generarne uno nuovo sostituisce il vecchio.',
     token_new: 'Genera token', token_regen: 'Genera un nuovo token', revoke: 'Revoca', token_once: 'Copialo ora, non verrà più mostrato:',
     token_revoked: 'Token revocato',
@@ -530,13 +559,18 @@ const I18N = {
     err: {auth_required: 'Accedi di nuovo', bad_login: 'Nome utente o password sbagliati', too_many: 'Troppi tentativi: riprova tra 15 minuti',
       setup_done: 'Configurazione già fatta: accedi', user_exists: 'Questo nome utente esiste già', bad_password: 'La password attuale è sbagliata',
       admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
-      not_configured: "Configura prima l'account nelle Impostazioni", csv_empty: 'Il file non ha righe',
+      not_configured: "Configura prima l'account nelle Impostazioni", gog_expired: "GOG non ha accettato il codice: accedi di nuovo e incolla il nuovo indirizzo",
+      epic_expired: "Epic non ha accettato il codice (scade dopo pochi minuti): accedi di nuovo", csv_empty: 'Il file non ha righe',
       csv_columns: 'Colonne titolo e piattaforma non trovate nella prima riga', csv_too_big: 'Troppe righe (max 5000)',
       missing_title_platform: 'manca titolo o piattaforma', bad_date: 'data non riconosciuta'},
     sync: {steam_ok: '{n} giochi in libreria, {f} aggiornati', xbox_ok: '{n} titoli, {f} aggiornati', psn_ok: '{n} giochi con trofei, {f} aggiornati',
       rate_steam: "Steam: troppe richieste, riprende tra un'ora", rate_xbox: "OpenXBL: limite orario raggiunto, riprende tra un'ora",
       rate_psn: "PSN: troppe richieste, riprende tra un'ora", steam_badkey: 'Steam: la chiave API non è valida',
       steam_noid: 'Steam ID "{id}" non trovato (serve lo SteamID64 o il nome del profilo)', steam_private: "Steam non restituisce la libreria: profilo e 'Dettagli di gioco' devono essere pubblici",
+      ra_ok: '{n} giochi con progressi', gog_ok: '{n} giochi in libreria, {f} controllati', epic_ok: '{n} elementi in libreria, {f} aggiornati',
+      rate_ra: "RetroAchievements: troppe richieste, riprende tra un'ora", rate_gog: "GOG: troppe richieste, riprende tra un'ora",
+      ra_badkey: 'RetroAchievements: nome utente o chiave API non validi', gog_expired: "GOG: accesso scaduto, ricollega l'account nelle Impostazioni",
+      epic_expired: "Epic: accesso scaduto, ricollega l'account nelle Impostazioni",
       xbox_badkey: 'OpenXBL: la chiave API non è valida', psn_expired: 'PSN: NPSSO scaduto o non valido, rigeneralo nelle Impostazioni',
       restart: 'interrotta dal riavvio', running: 'in corso…'},
     months: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'], locale: 'it-IT',
@@ -581,7 +615,7 @@ const coverUrl = g => g.cover ? `/covers/${encodeURIComponent(g.cover)}` : '';
 // cup with a platinum gradient (not the emoji, which is gold)
 const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
-const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation'};
+const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', epic: 'Epic', gog: 'GOG', ra: 'RetroAchievements'};
 
 // --- sign-in -----------------------------------------------------------------------
 let setupMode = false;
@@ -1014,7 +1048,31 @@ async function openSettings() {
   $('#setDlg').showModal();
 }
 let credState = {};
-const showCredState = () => $$('.cst').forEach(e => { e.textContent = credState[e.dataset.k] ? t('is_set') : ''; e.className = 'cst ok'; });
+const showCredState = () => {
+  $$('.cst').forEach(e => { e.textContent = credState[e.dataset.k] ? t(e.dataset.k.endsWith('_token') ? 'is_linked' : 'is_set') : ''; e.className = 'cst ok'; });
+  $$('.link').forEach(b => { const on = credState[b.dataset.src + '_token']; b.querySelector('[data-unlink]').hidden = !on; });
+};
+document.addEventListener('click', async e => {   // GOG / Epic: sign in, paste, link, unlink
+  const box = e.target.closest('.link');
+  if (!box) return;
+  const src = box.dataset.src;
+  try {
+    if (e.target.closest('[data-signin]')) {
+      const w = window.open('', '_blank');   // opened right away: after an await browsers would block it
+      const {url} = await api(`/api/link/${src}`);
+      w.location = url;
+    } else if (e.target.closest('[data-linkbtn]')) {
+      const code = box.querySelector('[data-code]').value.trim();
+      if (!code) return;
+      credState = await api(`/api/link/${src}`, {method: 'POST', body: JSON.stringify({code})});
+      box.querySelector('[data-code]').value = '';
+      showCredState(); toast(t('linked_ok'));
+    } else if (e.target.closest('[data-unlink]')) {
+      credState = await api(`/api/link/${src}`, {method: 'DELETE'});
+      showCredState(); toast(t('unlinked'));
+    }
+  } catch (err) { toast(t('error') + err.message, 6000); }
+});
 async function loadUsers() {
   const us = await api('/api/users');
   $('#usersList').innerHTML = us.map(u => `<div><span><b>${esc(u.username)}</b>${u.is_admin ? ' · admin' : ''} · ${t('games_n', {n: u.games})}${u.id === me.id ? ` (${t('you')})` : ''}</span>
@@ -1058,7 +1116,7 @@ $('#credForm').addEventListener('submit', async e => {
     toast(t('creds_saved'));
     const st = await api('/api/sync');
     for (const [k, v] of Object.entries(st)) {
-      const changed = Object.keys(body).some(b => ({steam_id: 'steam', steam_key: 'steam', xbl_key: 'xbox', psn_npsso: 'psn'})[b] === k);
+      const changed = Object.keys(body).some(b => ({steam_id: 'steam', steam_key: 'steam', xbl_key: 'xbox', psn_npsso: 'psn', ra_user: 'ra', ra_key: 'ra'})[b] === k);
       if (v.configured && changed) await api(`/api/sync/${k}`, {method: 'POST'}).catch(() => {});
     }
   } catch (err) { toast(t('error') + err.message, 5000); }

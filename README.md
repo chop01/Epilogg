@@ -5,7 +5,7 @@
 **A self-hosted log of the games you finished.** For each game you keep the title, platform, completion
 date, a 0–10 rating and notes. Covers, official names and release years come from IGDB.
 
-Epilogg can also look through your **Steam, Xbox and PlayStation** accounts and suggest games you have
+Epilogg can also look through your **Steam, Xbox, PlayStation, Epic, GOG and RetroAchievements** accounts and suggest games you have
 probably finished. It reads the achievements and trophies with their dates (story-ending achievement,
 platinum, 100%) and shows the suggestions in a list. You confirm or dismiss each one: nothing goes into
 your log automatically.
@@ -59,6 +59,9 @@ again.
 |---|---|
 | Steam | SteamID64, custom profile name or profile URL. The profile and "Game details" must be **public**. |
 | Xbox / PC Game Pass | An [OpenXBL](https://xbl.io) API key: sign in with your Microsoft account, then "API Keys". The free plan allows 150 requests/hour, so the first full sync can take a few hours. |
+| RetroAchievements | Username and the "Web API Key" from your [settings](https://retroachievements.org/controlpanel.php). "Beaten" awards are used as story-end hints, with their date. |
+| Epic Games | "Sign in", then paste the `authorizationCode` Epic shows. You get play time and achievements. Unofficial API, the same one Legendary/Heroic and Playnite use. |
+| GOG | "Sign in", then paste the address of the page you land on (it contains `code=`). You get achievements but no play time, so only games with at least one achievement are listed. Unofficial Galaxy API. |
 | PlayStation | The `npsso` value from [ca.account.sony.com/api/v1/ssocookie](https://ca.account.sony.com/api/v1/ssocookie), read while signed in on playstation.com. It lasts about two months. |
 
 Syncs run on their own: incrementally every day, and every hour when an API rate limit interrupted the
