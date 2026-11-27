@@ -928,7 +928,7 @@ UBI_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, 
 UBI_LOGIN = (f"https://connect.ubisoft.com/login?appId={UBI_LOGIN_APPID}&genomeId={UBI_GENOME}&lang=en-US"
              "&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready")
 UBI_GAMES_QUERY = """query AllGames { viewer { id ownedGames: games(filterBy: {isOwned: true}) {
-  totalCount nodes { id spaceId name } } } }"""
+  totalCount nodes { id spaceId name coverUrl } } } }"""
 # where a game was played -> platform in the log ("crossplay" = cross-platform space, usually PC here)
 UBI_PLATFORM = {"PC": "Ubisoft", "crossplay": "Ubisoft", "ORBIS": "PS4", "PROSPERO": "PS5", "DURANGO": "Xbox",
                 "XboxScarlett": "Xbox", "NX": "Switch", "SWITCH2": "Switch 2"}
@@ -1055,12 +1055,13 @@ def sync_ubisoft(uid, cr):
                 raise RateLimited("rate_ubisoft")
             return r
         played = get(f"https://public-ubiservices.ubi.com/v1/profiles/{t['userId']}/gamesplayed").json().get("gamesPlayed") or []
-        names, owned = {}, 0
+        names, covers, owned = {}, {}, 0
         r = client.post("https://public-ubiservices.ubi.com/v1/profiles/me/uplay/graphql",
                         json={"operationName": "AllGames", "query": UBI_GAMES_QUERY, "variables": {}})
         if r.status_code == 200:
             for g in ((((r.json().get("data") or {}).get("viewer") or {}).get("ownedGames") or {}).get("nodes") or []):
                 names[g.get("spaceId")] = g.get("name")
+                covers[g.get("spaceId")] = g.get("coverUrl")
                 owned += 1
         spaces = [g["spaceId"] for g in played if g.get("spaceId")]
         for i in range(0, len(spaces), 50):   # catalogue names for games played but not owned (Ubisoft+, consoles)
@@ -1075,7 +1076,7 @@ def sync_ubisoft(uid, cr):
             last = day((g.get("lastPlayed") or {}).get("updatedAt"))
             if not space or not last or not names.get(space):
                 continue   # no name anywhere: the Ubisoft Connect launcher itself, not a game
-            fp = f"{last}|{g.get('sessionsCount')}"
+            fp = f"{last}|{g.get('sessionsCount')}|c"   # "|c": since covers (0.7.1), so older rows refresh once
             if have.get(space) == fp:
                 continue
             s = client.get(f"https://public-ubiservices.ubi.com/v1/profiles/{t['userId']}/statscard",
@@ -1085,7 +1086,9 @@ def sync_ubisoft(uid, cr):
             time.sleep(0.2)
             upsert(uid, {"source": "ubisoft", "ext_id": space, "title": names.get(space) or space,
                          "platform": UBI_PLATFORM.get(g.get("spacePlatformType"), "Ubisoft"),
-                         "image_url": None, "hours": round(minutes / 60, 1) if minutes else None,
+                         # box art: from the owned games; for the others the same CDN path (the page hides it if missing)
+                         "image_url": covers.get(space) or f"https://ubiservices.cdn.ubi.com/{space}/applicationCardAsset/lowBoxArt.jpg",
+                         "hours": round(minutes / 60, 1) if minutes else None,
                          "ach_done": None, "ach_total": None, "first_played": first, "last_played": last,
                          "signal": "played", "signal_label": None, "signal_date": last, "fingerprint": fp})
     return msg("ubisoft_ok", n=owned, f=len(played))
