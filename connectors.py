@@ -741,7 +741,10 @@ NX_SCOPE = ("openid user user.mii moonUser:administration moonDevice:create moon
             "moonParentalControlSetting moonParentalControlSetting:update moonParentalControlSettingState "
             "moonPairingState moonSmartDevice:administration moonDailySummary moonMonthlySummary")
 NX_MOON = "https://api-lp1.pctl.srv.nintendo.net/moon"
-NX_VERSION, NX_BUILD = "1.17.0", "261"
+# Nintendo refuses old app builds ("update_required"); the check is on the build number only. If it happens
+# again, raise NINTENDO_PCTL_BUILD in the .env (the error shows in the Platforms tab).
+NX_VERSION = os.environ.get("NINTENDO_PCTL_VERSION", "2.6.1")
+NX_BUILD = os.environ.get("NINTENDO_PCTL_BUILD", "9999")
 NX_HEADERS = {"Cache-Control": "no-store", "X-Moon-App-Id": "com.nintendo.znma", "X-Moon-Os": "ANDROID",
               "X-Moon-Os-Version": "26", "X-Moon-Model": "", "X-Moon-TimeZone": os.environ.get("TZ", "Europe/London"),
               "X-Moon-Os-Language": "en-GB", "X-Moon-App-Language": "en-GB",
@@ -807,19 +810,27 @@ def sync_nintendo(uid, cr):
             r = client.get(NX_MOON + path, headers=h)
             if r.status_code == 429:
                 raise RateLimited("rate_nintendo")
+            if r.status_code == 400 and "update_required" in r.text:
+                raise SyncError("nintendo_update")
             r.raise_for_status()
             return r.json()
 
         devices = moon(f"/v1/users/{na_id}/devices").get("items") or []
         if not devices:
             raise SyncError("nintendo_nodevice")
-        titles = {}   # applicationId -> Title (name, image, first play on the console)
+        titles = {}   # applicationId -> Title (name, image, first play: the earliest across consoles)
+
+        def add_title(t):
+            old = titles.get(t["applicationId"])
+            if not old or (t.get("firstPlayDate") or "9") < (old.get("firstPlayDate") or "9"):
+                titles[t["applicationId"]] = {**(old or {}), **t}
+
         with db() as con:
             for d in devices:
                 dev = d["deviceId"]
                 for s in moon(f"/v1/devices/{dev}/daily_summaries").get("items") or []:
                     for t in s.get("playedApps") or []:
-                        titles[t["applicationId"]] = t
+                        add_title(t)
                     secs = {}
                     for p in (s.get("devicePlayers") or []) + ([s["anonymousPlayer"]] if s.get("anonymousPlayer") else []):
                         for a in p.get("playedApps") or []:
@@ -831,22 +842,50 @@ def sync_nintendo(uid, cr):
                 daily_months = {x[0] for x in con.execute(
                     "SELECT DISTINCT substr(day, 1, 7) FROM nintendo_play WHERE user_id=? AND device_id=?"
                     " AND substr(day, 9, 2) != '00'", (uid, dev))}
-                for month in moon(f"/v1/devices/{dev}/monthly_summaries").get("indexes") or []:
-                    m = moon(f"/v1/devices/{dev}/monthly_summaries/{month}")
+                # Monthly summaries: Nintendo lists the last 12 months but keeps older ones too (since the console was
+                # paired): walk back until it has no more. Months already stored are not fetched again, except the
+                # last two. Each fetched month leaves a marker row (app "", 0 s) so that empty months count as stored.
+                stored = {x[0] for x in con.execute(
+                    "SELECT DISTINCT substr(day, 1, 7) FROM nintendo_play WHERE user_id=? AND device_id=?"
+                    " AND substr(day, 9, 2) = '00'", (uid, dev))}
+                listed = sorted(moon(f"/v1/devices/{dev}/monthly_summaries").get("indexes") or [], reverse=True)
+
+                def month_summary(month):
+                    r = client.get(f"{NX_MOON}/v1/devices/{dev}/monthly_summaries/{month}", headers=h)
+                    return r.json() if r.status_code == 200 else None
+
+                def store_month(month, m):
                     for t in m.get("playedApps") or []:
-                        titles.setdefault(t["applicationId"], t)
+                        add_title(t)
+                    con.execute("INSERT OR IGNORE INTO nintendo_play (user_id, device_id, day, app_id, seconds)"
+                                " VALUES (?,?,?,'',0)", (uid, dev, f"{month}-00"))
                     if month in daily_months:
-                        continue
-                    # months older than the daily summaries we have: their totals, stored on day "YYYY-MM-00"
-                    secs = {}
-                    for p in m.get("devicePlayers") or []:
-                        for a in p.get("playedApps") or []:
-                            if a.get("playingTime"):
-                                secs[a["applicationId"]] = secs.get(a["applicationId"], 0) + a["playingTime"]
-                    for app_id, sec in secs.items():
-                        con.execute("INSERT INTO nintendo_play (user_id, device_id, day, app_id, seconds) VALUES (?,?,?,?,?)"
-                                    " ON CONFLICT(user_id, device_id, day, app_id) DO UPDATE SET seconds=excluded.seconds",
-                                    (uid, dev, f"{month}-00", app_id, sec))
+                        return
+                    # per-game seconds from the time ranking, stored on day "YYYY-MM-00"
+                    rank = ((m.get("insights") or {}).get("rankings") or {}).get("byTime") or []
+                    for x in rank:
+                        if x.get("units"):
+                            con.execute("INSERT INTO nintendo_play (user_id, device_id, day, app_id, seconds) VALUES (?,?,?,?,?)"
+                                        " ON CONFLICT(user_id, device_id, day, app_id) DO UPDATE SET seconds=excluded.seconds",
+                                        (uid, dev, f"{month}-00", x["applicationId"], x["units"]))
+
+                for i, month in enumerate(listed):
+                    if i < 2 or month not in stored:
+                        m = month_summary(month)
+                        if m:
+                            store_month(month, m)
+                month, misses = (listed[-1] if listed else None), 0
+                while month and misses < 3:
+                    y, mo = map(int, month.split("-"))
+                    month = f"{y - (mo == 1)}-{(mo - 2) % 12 + 1:02d}"
+                    if month in stored:
+                        break
+                    m = month_summary(month)
+                    if m:
+                        store_month(month, m)
+                        misses = 0
+                    else:
+                        misses += 1
         with db() as con:
             # a month total ("-00") counts only while that month has no daily rows
             rows = con.execute(
@@ -856,16 +895,21 @@ def sync_nintendo(uid, cr):
                 "   AND substr(q.day, 1, 7) = substr(p.day, 1, 7) AND substr(q.day, 9, 2) != '00'))"
                 " GROUP BY app_id", (uid,)).fetchall()
             names = {r["ext_id"]: r for r in con.execute(
-                "SELECT ext_id, title, image_url FROM candidates WHERE user_id=? AND source='nintendo'", (uid,))}
+                "SELECT ext_id, title, image_url, first_played FROM candidates WHERE user_id=? AND source='nintendo'", (uid,))}
         for r in rows:
             last = r["last"].replace("-00", "-01") if r["last"].endswith("-00") else r["last"]   # month total only
             t = titles.get(r["app_id"]) or {}
             old = names.get(r["app_id"])
             title = t.get("title") or (old and old["title"]) or r["app_id"]
             img = (t.get("imageUri") or {}).get("large") or (old and old["image_url"])
-            upsert(uid, {"source": "nintendo", "ext_id": r["app_id"], "title": title, "platform": "Switch",
+            # Switch 2 games have ids starting with 04 (a Switch 1 game played on a Switch 2 stays "Switch")
+            plat = "Switch 2" if r["app_id"].startswith("04") else "Switch"
+            upsert(uid, {"source": "nintendo", "ext_id": r["app_id"], "title": title, "platform": plat,
                          "image_url": img, "hours": round(r["secs"] / 3600, 1), "ach_done": None, "ach_total": None,
-                         "first_played": t.get("firstPlayDate") or r["first"].replace("-00", "-01"), "last_played": last,
+                         # exact date from Nintendo when known (stored months are not fetched again), else the month
+                         "first_played": min(filter(None, (t.get("firstPlayDate"), old and old["first_played"])),
+                                             default=r["first"].replace("-00", "-01")),
+                         "last_played": last,
                          "signal": "played", "signal_label": None, "signal_date": last,
                          "fingerprint": f"{r['secs']}|{r['last']}"})
     return msg("nintendo_ok", n=len(rows), d=len(devices))

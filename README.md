@@ -50,6 +50,7 @@ from outside your LAN. The session cookie is marked `Secure` whenever the proxy 
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | for covers | Twitch app credentials: create an app at [dev.twitch.tv/console](https://dev.twitch.tv/console) (category "Application Integration", any OAuth redirect such as `http://localhost`). |
 | `STEAM_API_KEY` | for Steam | One key for every user, from [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Users can also enter their own key. |
 | `TZ` | no | Time zone, e.g. `Europe/Zurich`. |
+| `NINTENDO_PCTL_BUILD` | no | Build number of the Parental Controls app that Epilogg presents itself as (default `9999`). Raise it if the Platforms tab says Nintendo wants a newer version. |
 | `STEAM_ID`, `XBL_API_KEY`, `PSN_NPSSO` | no | Only read on the first start, when they are copied to the admin's account. |
 
 ### Platform accounts
@@ -63,7 +64,7 @@ again.
 | Xbox / PC Game Pass | An [OpenXBL](https://xbl.io) API key: sign in with your Microsoft account, then "API Keys". The free plan allows 150 requests/hour, so the first full sync can take a few hours. |
 | RetroAchievements | Username and the "Web API Key" from your [settings](https://retroachievements.org/controlpanel.php). "Beaten" awards are used as story-end hints, with their date. |
 | Epic Games | "Sign in", then paste the `authorizationCode` Epic shows. You get play time and achievements. Unofficial API, the same one Legendary/Heroic and Playnite use. |
-| Nintendo Switch | Play time from the **Parental Controls** app. Pair the console with the app on your phone first; no restrictions are needed. Then click "Sign in", right-click "Select this person" → copy link, and paste it. Nintendo keeps only the last few weeks, so Epilogg stores every day it sees and the history grows from the pairing day on. Unofficial API, as nxapi uses. |
+| Nintendo Switch | Play time from the **Parental Controls** app. Pair the console with the app on your phone first; no restrictions are needed. Then click "Sign in", right-click "Select this person" → copy link, and paste it. Nintendo keeps daily details for a few weeks and monthly totals per game since the console was paired, so the first sync goes back to pairing and Epilogg keeps everything from then on. Unofficial API, as nxapi uses. |
 | GOG | "Sign in", then paste the address of the page you land on (it contains `code=`). You get achievements but no play time, so only games with at least one achievement are listed. Unofficial Galaxy API. |
 | PlayStation | The `npsso` value from [ca.account.sony.com/api/v1/ssocookie](https://ca.account.sony.com/api/v1/ssocookie), read while signed in on playstation.com. It lasts about two months. |
 
