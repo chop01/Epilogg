@@ -273,7 +273,7 @@
 <div id="ncView" hidden>
   <section class="filters">
     <input type="search" id="nq" data-i18n-ph="search">
-    <select id="nSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option></select>
+    <select id="nSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option><option value="ubisoft">Ubisoft</option></select>
   </section>
   <div class="hint" style="padding:0 24px;color:var(--muted);font-size:13px" data-i18n="nc_hint"></div>
   <div class="clist" id="nclist"></div>
@@ -292,7 +292,7 @@
       <option value="new" data-i18n="c_new"></option>
       <option value="confirmed" data-i18n="c_confirmed"></option>
     </select>
-    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option></select>
+    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option><option value="ubisoft">Ubisoft</option></select>
     <select id="cSig" data-i18n-title="sig_title">
       <option value="strong" data-i18n="sig_strong"></option>
       <option value="any" data-i18n="sig_any"></option>
@@ -389,6 +389,10 @@
           <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
         <div class="hint" data-i18n-html="h_nintendo"></div>
         <div class="row"><input data-code style="flex:1;min-width:0" data-i18n-ph="paste_nintendo"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
+      <div class="link" data-src="ubisoft"><div class="row" style="align-items:center"><b style="margin-right:auto">Ubisoft Connect <span class="cst" data-k="ubisoft_token"></span></b>
+          <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
+        <div class="hint" data-i18n-html="h_ubisoft"></div>
+        <div class="row"><input data-code type="password" autocomplete="off" style="flex:1;min-width:0" data-i18n-ph="paste_ubisoft"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
       <div class="link" data-src="gog"><div class="row" style="align-items:center"><b style="margin-right:auto">GOG <span class="cst" data-k="gog_token"></span></b>
           <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
         <div class="hint" data-i18n-html="h_gog"></div>
@@ -476,6 +480,8 @@ const I18N = {
     h_gog: '1. "Sign in" opens GOG in a new tab. 2. After signing in you land on a mostly empty page: copy its whole address from the address bar (it contains <code>code=</code>). 3. Paste it here and click "Link". Achievements only (GOG does not share play time), so only games with at least one achievement show up.',
     h_nintendo: 'Play time from the <b>Nintendo Switch Parental Controls</b> app: pair your Switch with the app on your phone first (no restrictions needed). Nintendo keeps monthly totals per game since the console was paired: the first sync goes back to then, and from there the history stays here. 1. "Sign in" opens Nintendo in a new tab. 2. On "Select this person", right-click (long press on a phone) → copy link. 3. Paste it here and click "Link" within a few minutes. Unofficial API, as nxapi uses.',
     paste_nintendo: 'npf54789befb391a838://auth#session_token_code=…', sig_played: '🎮 Last played',
+    h_ubisoft: 'No sign-in code page here, so you copy your session from the browser (Epilogg never sees your password). 1. "Sign in" opens Ubisoft in a new tab: sign in with <b>Remember me</b> ticked. 2. On the page you land on, open the browser console (F12 → Console) and run <code>copy(localStorage.PRODloginData + localStorage.PRODrememberMe)</code> (Chrome may ask you to type <i>allow pasting</i> first). 3. Paste here and click "Link". It is a session key: paste it only here. Play time and last played from the game stats; no achievements. Unofficial API.',
+    paste_ubisoft: 'session copied from the console…',
     signin_btn: 'Sign in', link_btn: 'Link', unlink_btn: 'Unlink', linked_ok: 'Account linked. Syncing…', unlinked: 'Account unlinked',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ linked',
     s_homepage: 'Homepage widget', h_homepage: 'A read-only token for <code>/api/stats</code> (completed this year, total, to review). Generating a new one replaces the old one.',
@@ -497,6 +503,7 @@ const I18N = {
       admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
       not_configured: 'Set up the account in Settings first', gog_expired: 'GOG did not accept the code: sign in again and paste the new address',
       epic_expired: 'Epic did not accept the code (it expires after a few minutes): sign in again',
+      ubisoft_link: 'No Ubisoft session found in what you pasted: run the console command again on connect.ubisoft.com after signing in',
       nintendo_link: 'Nintendo did not accept the link: click "Sign in" again and copy the new "Select this person" link', csv_empty: 'The file has no rows',
       csv_columns: 'Title and platform columns not found in the first row', csv_too_big: 'Too many rows (max 5000)',
       missing_title_platform: 'title or platform missing', bad_date: 'date not recognised'},
@@ -507,6 +514,8 @@ const I18N = {
       nintendo_ok: '{n} games played on {d} console(s)', nintendo_expired: 'Nintendo: sign-in expired, link the account again in Settings',
       nintendo_update: 'Nintendo asks for a newer app version: raise NINTENDO_PCTL_BUILD in the .env',
       nintendo_nodevice: 'Nintendo: no console paired with the Parental Controls app', rate_nintendo: 'Nintendo: too many requests, resumes in an hour',
+      ubisoft_ok: '{n} games owned, {f} played', ubisoft_expired: 'Ubisoft: session expired, link the account again in Settings',
+      rate_ubisoft: 'Ubisoft: too many requests, resumes in an hour',
       ra_ok: '{n} games with progress', gog_ok: '{n} games in library, {f} checked', epic_ok: '{n} items in library, {f} updated',
       rate_ra: 'RetroAchievements: too many requests, resumes in an hour', rate_gog: 'GOG: too many requests, resumes in an hour',
       ra_badkey: 'RetroAchievements: username or API key not valid', gog_expired: 'GOG: sign-in expired, link the account again in Settings',
@@ -564,6 +573,8 @@ const I18N = {
     h_gog: '1. "Accedi" apre GOG in una nuova scheda. 2. Dopo l\'accesso arrivi su una pagina quasi vuota: copia il suo indirizzo intero dalla barra (contiene <code>code=</code>). 3. Incollalo qui e premi "Collega". Solo achievement (GOG non fornisce le ore), quindi compaiono solo i giochi con almeno un achievement.',
     h_nintendo: 'Ore di gioco dall\'app <b>Nintendo Switch Parental Controls</b> (Controllo genitori): prima abbina la Switch all\'app sul telefono (non servono restrizioni). Nintendo conserva i totali mensili per gioco da quando la console è abbinata: la prima sincronizzazione risale fino ad allora, e da lì lo storico resta qui. 1. "Accedi" apre Nintendo in una nuova scheda. 2. Su "Seleziona questa persona" clic destro (pressione lunga sul telefono) → copia link. 3. Incollalo qui e premi "Collega" entro pochi minuti. API non ufficiale, la stessa di nxapi.',
     paste_nintendo: 'npf54789befb391a838://auth#session_token_code=…', sig_played: '🎮 Ultima partita',
+    h_ubisoft: 'Qui non c\'è una pagina con un codice, quindi copi la sessione dal browser (Epilogg non vede mai la password). 1. "Accedi" apre Ubisoft in una nuova scheda: accedi con <b>Ricordami</b> spuntato. 2. Nella pagina dove arrivi apri la console del browser (F12 → Console) ed esegui <code>copy(localStorage.PRODloginData + localStorage.PRODrememberMe)</code> (Chrome può chiederti prima di scrivere <i>allow pasting</i>). 3. Incolla qui e premi "Collega". È una chiave di sessione: incollala solo qui. Ore e ultima partita dalle statistiche dei giochi; niente achievement. API non ufficiale.',
+    paste_ubisoft: 'sessione copiata dalla console…',
     signin_btn: 'Accedi', link_btn: 'Collega', unlink_btn: 'Scollega', linked_ok: 'Account collegato. Sincronizzo…', unlinked: 'Account scollegato',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ collegato',
     s_homepage: 'Widget di Homepage', h_homepage: 'Token in sola lettura per <code>/api/stats</code> (completati quest\'anno, totale, da valutare). Generarne uno nuovo sostituisce il vecchio.',
@@ -585,6 +596,7 @@ const I18N = {
       admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
       not_configured: "Configura prima l'account nelle Impostazioni", gog_expired: "GOG non ha accettato il codice: accedi di nuovo e incolla il nuovo indirizzo",
       epic_expired: "Epic non ha accettato il codice (scade dopo pochi minuti): accedi di nuovo",
+      ubisoft_link: 'Nessuna sessione Ubisoft in quello che hai incollato: riesegui il comando nella console su connect.ubisoft.com dopo l\'accesso',
       nintendo_link: 'Nintendo non ha accettato il link: premi di nuovo "Accedi" e copia il nuovo link di "Seleziona questa persona"', csv_empty: 'Il file non ha righe',
       csv_columns: 'Colonne titolo e piattaforma non trovate nella prima riga', csv_too_big: 'Troppe righe (max 5000)',
       missing_title_platform: 'manca titolo o piattaforma', bad_date: 'data non riconosciuta'},
@@ -595,6 +607,8 @@ const I18N = {
       nintendo_ok: '{n} giochi giocati su {d} console', nintendo_expired: "Nintendo: accesso scaduto, ricollega l'account nelle Impostazioni",
       nintendo_update: "Nintendo chiede una versione dell'app più recente: aumentare NINTENDO_PCTL_BUILD nel .env",
       nintendo_nodevice: "Nintendo: nessuna console abbinata all'app Controllo genitori", rate_nintendo: "Nintendo: troppe richieste, riprende tra un'ora",
+      ubisoft_ok: '{n} giochi posseduti, {f} giocati', ubisoft_expired: "Ubisoft: sessione scaduta, ricollega l'account nelle Impostazioni",
+      rate_ubisoft: "Ubisoft: troppe richieste, riprende tra un'ora",
       ra_ok: '{n} giochi con progressi', gog_ok: '{n} giochi in libreria, {f} controllati', epic_ok: '{n} elementi in libreria, {f} aggiornati',
       rate_ra: "RetroAchievements: troppe richieste, riprende tra un'ora", rate_gog: "GOG: troppe richieste, riprende tra un'ora",
       ra_badkey: 'RetroAchievements: nome utente o chiave API non validi', gog_expired: "GOG: accesso scaduto, ricollega l'account nelle Impostazioni",
@@ -643,7 +657,7 @@ const coverUrl = g => g.cover ? `/covers/${encodeURIComponent(g.cover)}` : '';
 // cup with a platinum gradient (not the emoji, which is gold)
 const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
-const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', epic: 'Epic', gog: 'GOG', ra: 'RetroAchievements', nintendo: 'Nintendo'};
+const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', epic: 'Epic', gog: 'GOG', ra: 'RetroAchievements', nintendo: 'Nintendo', ubisoft: 'Ubisoft'};
 
 // --- sign-in -----------------------------------------------------------------------
 let setupMode = false;
@@ -1034,7 +1048,7 @@ function renderNc() {
 }
 ['#nq', '#nSrc'].forEach(s => $(s).addEventListener('input', renderNc));
 function candRow(c, st) {
-    const ach = c.ach_total ? t('ach_n', {d: c.ach_done, t: c.ach_total}) : c.source === 'nintendo' ? '' : t('no_ach');   // no achievements on Switch
+    const ach = c.ach_total ? t('ach_n', {d: c.ach_done, t: c.ach_total}) : ['nintendo', 'ubisoft'].includes(c.source) ? '' : t('no_ach');   // no achievements from these sources
     const label = c.signal === '100' || !c.signal_label ? '' : `: <i>${esc(c.signal_label)}</i>`;
     const sigTxt = c.signal === 'last' ? `${t('sig_last')}${label} · ${fmtDate(c.signal_date)} <span style="color:var(--muted)">${t('weak')}</span>`
       : c.signal ? `${t('sig_' + c.signal)}${label} · ${fmtDate(c.signal_date)}` : t('no_signal');

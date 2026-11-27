@@ -32,7 +32,7 @@ ENV_STEAM_KEY = os.environ.get("STEAM_API_KEY", "")
 ENV_CREDS = {"steam_id": os.environ.get("STEAM_ID", ""), "xbl_key": os.environ.get("XBL_API_KEY", ""),
              "psn_npsso": os.environ.get("PSN_NPSSO", "")}
 CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso", "ra_user", "ra_key")   # typed in the settings
-LINKED = ("gog_token", "epic_token", "nintendo_token")   # set by signing in (gog_link / epic_link)
+LINKED = ("gog_token", "epic_token", "nintendo_token", "ubisoft_token")   # set by signing in (gog_link / epic_link)
 
 
 def psn_token_file(uid: int) -> str:   # PSN session token (refreshes itself)
@@ -129,7 +129,7 @@ def configured(uid: int) -> dict:
     return {"steam": bool(c.get("steam_key") and c.get("steam_id")), "xbox": bool(c.get("xbl_key")),
             "psn": bool(c.get("psn_npsso")), "ra": bool(c.get("ra_user") and c.get("ra_key")),
             "gog": bool(c.get("gog_token")), "epic": bool(c.get("epic_token")),
-            "nintendo": bool(c.get("nintendo_token"))}
+            "nintendo": bool(c.get("nintendo_token")), "ubisoft": bool(c.get("ubisoft_token"))}
 
 
 def set_state(uid, source, status, message=None, ok=False):
@@ -914,10 +914,187 @@ def sync_nintendo(uid, cr):
                          "fingerprint": f"{r['secs']}|{r['last']}"})
     return msg("nintendo_ok", n=len(rows), d=len(devices))
 
+# --- Ubisoft Connect (session copied from the browser, as the GOG Galaxy Uplay integration does) ---
+# No OAuth code page for third parties: the user signs in on connect.ubisoft.com (with "Remember me") and pastes
+# the session the site keeps in localStorage. Epilogg never sees the password: it renews the ticket on its own
+# (PUT with the ticket, or POST with the rememberMe ticket when the ticket has expired).
+
+# app id of the Ubisoft Connect web site (the old Galaxy one, b8fde481…, no longer reaches the games list)
+UBI_APPID = "f35adcb5-1911-440c-b1c9-48fdc1701c68"
+UBI_LOGIN_APPID, UBI_GENOME = "b8fde481-327d-4031-85ce-7c10a202a700", "fbd6791c-a6c6-4206-a75e-77234080b87b"
+UBI_SESSIONS = "https://public-ubiservices.ubi.com/v3/profiles/sessions"
+UBI_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+          "Chrome/131.0.0.0 Safari/537.36")
+UBI_LOGIN = (f"https://connect.ubisoft.com/login?appId={UBI_LOGIN_APPID}&genomeId={UBI_GENOME}&lang=en-US"
+             "&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready")
+UBI_GAMES_QUERY = """query AllGames { viewer { id ownedGames: games(filterBy: {isOwned: true}) {
+  totalCount nodes { id spaceId name } } } }"""
+# where a game was played -> platform in the log ("crossplay" = cross-platform space, usually PC here)
+UBI_PLATFORM = {"PC": "Ubisoft", "crossplay": "Ubisoft", "ORBIS": "PS4", "PROSPERO": "PS5", "DURANGO": "Xbox",
+                "XboxScarlett": "Xbox", "NX": "Switch", "SWITCH2": "Switch 2"}
+
+
+def ubi_headers(t=None) -> dict:
+    h = {"Ubi-AppId": UBI_APPID, "User-Agent": UBI_UA, "Content-Type": "application/json",
+         "Origin": "https://connect.ubisoft.com", "Referer": "https://connect.ubisoft.com/"}
+    if t:
+        h |= {"Authorization": f"Ubi_v1 t={t['ticket']}", "Ubi-SessionId": t.get("sessionId", "")}
+    return h
+
+
+def ubi_save(uid, j: dict, old: dict | None = None):
+    old = old or {}
+    set_cred(uid, "ubisoft_token", json.dumps({
+        "ticket": j["ticket"], "sessionId": j.get("sessionId"), "userId": j.get("userId") or old.get("userId"),
+        "rememberMeTicket": j.get("rememberMeTicket") or old.get("rememberMeTicket")}))
+
+
+def ubi_link(uid, pasted: str):
+    """pasted = what the browser console prints for PRODloginData and PRODrememberMe (one or more JSON objects)."""
+    found = {}
+
+    def walk(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k in ("ticket", "sessionId", "userId", "rememberMeTicket") and isinstance(v, str) and v:
+                    found.setdefault(k, v)
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+        elif isinstance(x, str) and x.strip()[:1] in "{[":
+            try:
+                walk(json.loads(x))
+            except ValueError:
+                pass
+
+    dec, text, i = json.JSONDecoder(), pasted.strip(), 0
+    while i < len(text):   # the paste may hold several JSON values one after the other
+        if text[i] in "{[\"":
+            try:
+                obj, end = dec.raw_decode(text, i)
+                walk(obj)
+                i = end
+                continue
+            except ValueError:
+                pass
+        i += 1
+    if not found.get("ticket") and not found.get("rememberMeTicket"):
+        # what arrived, without values: length and the key names of any JSON in it
+        names = sorted(set(re.findall(r'"([A-Za-z_][\w.-]{0,40})"\s*:', text)))
+        log.warning("ubisoft link: no ticket in %d chars, starts with %r, keys %s", len(text),
+                    re.sub(r"[A-Za-z0-9]", "x", text[:12]), names[:40])
+        raise SyncError("ubisoft_link")
+    log.warning("ubisoft link: found %s", sorted(found))   # names only
+    t = ubi_refresh(found)   # checks right away that Ubisoft accepts the session
+    ubi_save(uid, t, found)
+    if not found.get("rememberMeTicket"):
+        log.warning("ubisoft: no rememberMe ticket, the session will expire unless renewed every hour")
+
+
+def ubi_refresh(t: dict) -> dict:
+    """New ticket: from the current one (PUT), or from the rememberMe ticket (POST) when it has expired."""
+    if t.get("ticket"):
+        r = httpx.put(UBI_SESSIONS, headers=ubi_headers() | {"Authorization": f"Ubi_v1 t={t['ticket']}"}, timeout=30)
+        if r.status_code == 200 and "ticket" in r.text:
+            return r.json()
+        log.warning("ubisoft ticket refresh: %s %s", r.status_code, ubi_err(r))
+    if t.get("rememberMeTicket"):
+        r = httpx.post(UBI_SESSIONS, headers=ubi_headers() | {"Authorization": f"rm_v1 t={t['rememberMeTicket']}"},
+                       json={"rememberMe": True}, timeout=30)
+        if r.status_code == 200 and "ticket" in r.text:
+            return r.json()
+        log.warning("ubisoft rememberMe refresh: %s %s", r.status_code, ubi_err(r))
+    raise SyncError("ubisoft_expired")
+
+
+def ubi_err(r) -> str:
+    """Error fields of a Ubisoft response, never tickets."""
+    try:
+        j = r.json()
+        return str({k: j.get(k) for k in ("errorCode", "message", "httpCode") if k in j})
+    except ValueError:
+        return r.text[:120] if "ticket" not in r.text else "(body hidden)"
+
+
+def ubi_keepalive(uid) -> dict:
+    old = token_of(creds(uid), "ubisoft_token")
+    j = ubi_refresh(old)
+    ubi_save(uid, j, old)
+    return token_of(creds(uid), "ubisoft_token")
+
+
+def ubi_minutes(cards) -> float | None:
+    """Play time from the stats card, as the Galaxy integration reads it: a LongTimespan stat called playtime
+    (or the one that looks like a total)."""
+    factor = {"Hours": 1 / 60, "Minutes": 1, "Seconds": 60, "Miliseconds": 60000, "Milliseconds": 60000}
+    spans = [c for c in cards if c.get("format") == "LongTimespan" and c.get("unit") in factor]
+    if not spans:
+        return None
+    named = [c for c in spans if (c.get("displayName") or "").strip().lower() in
+             ("playtime", "time played", "play time", "total play time", "total playtime")]
+    best = named[0] if named else max(spans, key=lambda c: sum(w in (c.get("displayName") or "").lower()
+                                                                  for w in ("all", "total", "absolute")))
+    try:
+        return float(best["value"]) / factor[best["unit"]]
+    except (TypeError, ValueError):
+        return None
+
+
+def sync_ubisoft(uid, cr):
+    """Games played (first/last played), names from the owned games and the application catalogue, play time from
+    the stats card when the game publishes one."""
+    t = ubi_keepalive(uid)
+    with httpx.Client(timeout=30, headers=ubi_headers(t)) as client:
+        def get(url, **params):
+            r = client.get(url, params=params)
+            if r.status_code in (401, 403):
+                log.warning("ubisoft %s: %s %s", url.rsplit("/", 1)[-1], r.status_code, ubi_err(r))
+                raise SyncError("ubisoft_expired")
+            if r.status_code == 429:
+                raise RateLimited("rate_ubisoft")
+            return r
+        played = get(f"https://public-ubiservices.ubi.com/v1/profiles/{t['userId']}/gamesplayed").json().get("gamesPlayed") or []
+        names, owned = {}, 0
+        r = client.post("https://public-ubiservices.ubi.com/v1/profiles/me/uplay/graphql",
+                        json={"operationName": "AllGames", "query": UBI_GAMES_QUERY, "variables": {}})
+        if r.status_code == 200:
+            for g in ((((r.json().get("data") or {}).get("viewer") or {}).get("ownedGames") or {}).get("nodes") or []):
+                names[g.get("spaceId")] = g.get("name")
+                owned += 1
+        spaces = [g["spaceId"] for g in played if g.get("spaceId")]
+        for i in range(0, len(spaces), 50):   # catalogue names for games played but not owned (Ubisoft+, consoles)
+            r = client.get("https://api-ubiservices.ubi.com/v2/applications", params={"spaceIds": ",".join(spaces[i:i + 50])})
+            if r.status_code == 200:
+                for a in r.json().get("applications") or []:
+                    names.setdefault(a.get("spaceId"), a.get("displayName") or a.get("name"))
+        have = known(uid, "ubisoft")
+        for g in played:
+            space = g.get("spaceId")
+            first = day((g.get("firstPlayed") or {}).get("createdAt"))
+            last = day((g.get("lastPlayed") or {}).get("updatedAt"))
+            if not space or not last or not names.get(space):
+                continue   # no name anywhere: the Ubisoft Connect launcher itself, not a game
+            fp = f"{last}|{g.get('sessionsCount')}"
+            if have.get(space) == fp:
+                continue
+            s = client.get(f"https://public-ubiservices.ubi.com/v1/profiles/{t['userId']}/statscard",
+                           params={"spaceId": space}, headers={"Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"})
+            cards = (s.json() or {}).get("Statscards") or [] if s.status_code == 200 else []   # 412: no stats
+            minutes = ubi_minutes(cards)
+            time.sleep(0.2)
+            upsert(uid, {"source": "ubisoft", "ext_id": space, "title": names.get(space) or space,
+                         "platform": UBI_PLATFORM.get(g.get("spacePlatformType"), "Ubisoft"),
+                         "image_url": None, "hours": round(minutes / 60, 1) if minutes else None,
+                         "ach_done": None, "ach_total": None, "first_played": first, "last_played": last,
+                         "signal": "played", "signal_label": None, "signal_date": last, "fingerprint": fp})
+    return msg("ubisoft_ok", n=owned, f=len(played))
+
+
 # --- orchestration -------------------------------------------------------------
 
 SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn, "ra": sync_ra, "gog": sync_gog, "epic": sync_epic,
-        "nintendo": sync_nintendo}
+        "nintendo": sync_nintendo, "ubisoft": sync_ubisoft}
 SCHEDULED = tuple(SYNC)
 
 
@@ -954,13 +1131,15 @@ def scheduler():
             users = [r["id"] for r in con.execute("SELECT id FROM users")]
             state = {(r["user_id"], r["source"]): dict(r) for r in con.execute("SELECT * FROM sync_state")}
         for uid in users:
-            if configured(uid)["epic"]:
-                try:
-                    epic_keepalive(uid)
-                except SyncError:
-                    set_state(uid, "epic", "error", msg("epic_expired"))
-                except Exception:   # noqa: BLE001 - network hiccup: try again next hour
-                    log.warning("epic keepalive failed for user %s", uid)
+            # Epic and Ubisoft sessions expire after a few hours without use: renew them every hour
+            for src, keep in (("epic", epic_keepalive), ("ubisoft", ubi_keepalive)):
+                if configured(uid)[src]:
+                    try:
+                        keep(uid)
+                    except SyncError as e:
+                        set_state(uid, src, "error", msg(e.key))
+                    except Exception:   # noqa: BLE001 - network hiccup: try again next hour
+                        log.warning("%s keepalive failed for user %s", src, uid)
             for src, ok in configured(uid).items():
                 if not ok or src not in SCHEDULED:
                     continue

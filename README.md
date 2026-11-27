@@ -5,7 +5,7 @@
 **A self-hosted log of the games you finished.** For each game you keep the title, platform, completion
 date, a 0–10 rating and notes. Covers, official names and release years come from IGDB.
 
-Epilogg can also look through your **Steam, Xbox, PlayStation, Epic, GOG, RetroAchievements and Nintendo Switch** accounts and suggest games you have
+Epilogg can also look through your **Steam, Xbox, PlayStation, Epic, GOG, Ubisoft Connect, RetroAchievements and Nintendo Switch** accounts and suggest games you have
 probably finished. It reads the achievements and trophies with their dates (story-ending achievement,
 platinum, 100%) and shows the suggestions in a list. You confirm or dismiss each one: nothing goes into
 your log automatically.
@@ -66,6 +66,7 @@ again.
 | Epic Games | "Sign in", then paste the `authorizationCode` Epic shows. You get play time and achievements. Unofficial API, the same one Legendary/Heroic and Playnite use. |
 | Nintendo Switch | Play time from the **Parental Controls** app. Pair the console with the app on your phone first; no restrictions are needed. Then click "Sign in", right-click "Select this person" → copy link, and paste it. Nintendo keeps daily details for a few weeks and monthly totals per game since the console was paired, so the first sync goes back to pairing and Epilogg keeps everything from then on. Unofficial API, as nxapi uses. |
 | GOG | "Sign in", then paste the address of the page you land on (it contains `code=`). You get achievements but no play time, so only games with at least one achievement are listed. Unofficial Galaxy API. |
+| Ubisoft Connect | "Sign in" with *Remember me* ticked. On connect.ubisoft.com open the browser console and run `copy(localStorage.PRODloginData + localStorage.PRODrememberMe)`, then paste the result. That is your session; Epilogg never sees the password and renews the session by itself. You get the games played with first and last played dates, plus play time for the games that publish it in their stats. No achievements. Unofficial API, the one the Ubisoft Connect website uses. |
 | PlayStation | The `npsso` value from [ca.account.sony.com/api/v1/ssocookie](https://ca.account.sony.com/api/v1/ssocookie), read while signed in on playstation.com. It lasts about two months. |
 
 Syncs run on their own: incrementally every day, and every hour when an API rate limit interrupted the

@@ -114,7 +114,7 @@ PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S"
                  "PS Vita": {"Vita"}, "PSP": {"PSP"}, "GOG": {"PC"}, "Epic": {"PC"},
                  "NES": {"NES"}, "SNES": {"SNES"}, "N64": {"N64"}, "Game Boy": {"GB"}, "GBC": {"GBC"}, "NDS": {"NDS"},
                  "GameCube": {"NGC"}, "Mega Drive": {"Genesis/MegaDrive"}, "Master System": {"SMS"},
-                 "Switch 2": {"NS2", "Switch 2", "Switch"}}
+                 "Switch 2": {"NS2", "Switch 2", "Switch"}, "Ubisoft": {"PC"}}
 
 
 def similarity(title: str, name: str) -> float:
@@ -355,11 +355,12 @@ def get_credentials(request: Request):
 
 LINKS = {"gog": (connectors.gog_login_url, connectors.gog_link, "gog_token"),
          "epic": (lambda uid: connectors.EPIC_LOGIN, connectors.epic_link, "epic_token"),
-         "nintendo": (connectors.nintendo_login_url, connectors.nintendo_link, "nintendo_token")}
+         "nintendo": (connectors.nintendo_login_url, connectors.nintendo_link, "nintendo_token"),
+         "ubisoft": (lambda uid: connectors.UBI_LOGIN, connectors.ubi_link, "ubisoft_token")}
 
 
 class LinkIn(BaseModel):
-    code: str = Field(min_length=4, max_length=4000)
+    code: str = Field(min_length=4, max_length=20000)   # a Ubisoft session is a few KB
 
 
 @app.get("/api/link/{source}")
