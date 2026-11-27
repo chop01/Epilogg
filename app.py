@@ -169,6 +169,7 @@ class GameIn(BaseModel):
     rating: float | None = Field(default=None, ge=0, le=10)
     notes: str | None = Field(default=None, max_length=5000)
     hours: float | None = Field(default=None, ge=0, le=100000)   # entered by hand: takes precedence over the platforms
+    igdb_id: int | None = None   # new games only: the IGDB match picked in the dialog (otherwise automatic)
 
     @field_validator("rating")
     @classmethod
@@ -548,9 +549,26 @@ def create_game(user_id: int, g: GameIn, source: str = "manual") -> int:
             (user_id, g.title.strip(), g.platform.strip(), g.completed_on and g.completed_on.isoformat(),
              g.rating, g.notes, g.hours, source, now(), now()))
         gid = cur.lastrowid
+    if g.igdb_id and igdb_enabled():   # picked in the dialog: apply it now, as a manual choice
+        try:
+            apply_match(gid, igdb_by_id(g.igdb_id), manual=True)
+            connectors.link_existing(user_id)
+            return gid
+        except Exception:   # noqa: BLE001 - fall back to the automatic match
+            pass
     if igdb_enabled():   # in the background: the response does not wait for IGDB, the cover shows up shortly after
         threading.Thread(target=match_new_game, args=(user_id, gid, g.title, g.platform), daemon=True).start()
     return gid
+
+
+def igdb_by_id(igdb_id: int) -> dict:
+    rows = igdb_query("games", f"fields name,first_release_date,cover.image_id; where id = {int(igdb_id)};")
+    if not rows:
+        raise HTTPException(404, "not_found")
+    g = rows[0]
+    ts = g.get("first_release_date")
+    return {"id": g["id"], "name": g["name"], "year": datetime.fromtimestamp(ts, timezone.utc).year if ts else None,
+            "cover_id": (g.get("cover") or {}).get("image_id")}
 
 
 def match_new_game(user_id: int, gid: int, title: str, platform: str):
@@ -605,14 +623,7 @@ def search(q: str, platform: str = ""):
 @app.post("/api/games/{gid}/match")
 def match(gid: int, m: MatchIn, request: Request):
     get_game(gid, request)
-    rows = igdb_query("games", f"fields name,first_release_date,cover.image_id; where id = {m.igdb_id};")
-    if not rows:
-        raise HTTPException(404, "not_found")
-    g = rows[0]
-    ts = g.get("first_release_date")
-    apply_match(gid, {"id": g["id"], "name": g["name"],
-                      "year": datetime.fromtimestamp(ts, timezone.utc).year if ts else None,
-                      "cover_id": (g.get("cover") or {}).get("image_id")}, manual=True)
+    apply_match(gid, igdb_by_id(m.igdb_id), manual=True)
     return get_game(gid, request)
 
 

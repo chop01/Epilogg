@@ -70,6 +70,7 @@
   .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 8px; max-height: 320px; overflow: auto; }
   .results div { cursor: pointer; font-size: 11px; color: var(--muted); }
   .results div:hover { color: var(--text); }
+  .results div.sel { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 5px; color: var(--text); }
   .results img, .results .ph { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 5px; background: var(--panel2); display: block; }
   .tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--line); }
   .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 10px 14px; }
@@ -450,8 +451,8 @@
     <label class="full"><span data-i18n="f_title"></span> <input name="title" required maxlength="300"></label>
     <label><span data-i18n="f_platform"></span> <input name="platform" required list="platList" maxlength="50"></label>
     <label><span data-i18n="f_completed"></span> <input name="completed_on" type="date"></label>
-    <label><span data-i18n="f_rating"></span> <input name="rating" type="number" min="0" max="10" step="0.5"></label>
-    <label><span data-i18n="f_hours"></span> <input name="hours" type="number" min="0" step="0.1"></label>
+    <label><span data-i18n="f_rating"></span> <input name="rating" inputmode="decimal" autocomplete="off" placeholder="8,5"></label>
+    <label><span data-i18n="f_hours"></span> <input name="hours" inputmode="decimal" autocomplete="off"></label>
     <div class="full" id="platInfo" style="font-size:13px;color:var(--muted)"></div>
     <label class="full"><span data-i18n="f_notes"></span> <textarea name="notes" rows="2" maxlength="5000"></textarea></label>
     <div class="igdb" id="igdbBox">
@@ -502,7 +503,8 @@ const I18N = {
     sig_title: 'How likely it is that the game was finished', sig_strong: 'Strong hint (story end, platinum, 100%)',
     sig_any: 'Also weak hints (last achievement / last played)', sig_all: 'All games started', nothing: 'Nothing to show.',
     f_title: 'Title', f_platform: 'Platform', f_completed: 'Completed on', f_rating: 'Rating (0–10)', f_hours: 'Hours played', f_notes: 'Notes',
-    igdb_ph: 'Search IGDB to change the cover…', search_btn: 'Search', delete: 'Delete', cancel: 'Cancel', save: 'Save',
+    igdb_ph: 'Search IGDB to change the cover…', igdb_will: 'Cover from IGDB:', igdb_change: '· click another one below to change it',
+    igdb_auto: 'Type the title: the cover from IGDB shows up here.', bad_rating: 'Rating: a number from 0 to 10 (8.5 or 8,5)', bad_hours: 'Hours: a number (12.5 or 12,5)', search_btn: 'Search', delete: 'Delete', cancel: 'Cancel', save: 'Save',
     from_plat: 'From the platform ({s}): {h}', no_hours: 'hours not available', ach_n: '{d}/{t} achievements',
     manual_wins: ' — hours entered here take precedence', igdb_matched: 'Matched on IGDB:', manual_pick: '· picked by hand',
     to_check: '· <b style="color:var(--mid)">to check</b>: if it is right, click it below to confirm', automatic: '· automatic',
@@ -598,7 +600,8 @@ const I18N = {
     sig_title: 'Quanto è probabile che il gioco sia stato finito', sig_strong: 'Indizio forte (fine storia, platino, 100%)',
     sig_any: 'Anche indizi deboli (ultimo achievement / ultima partita)', sig_all: 'Tutti i giochi avviati', nothing: 'Niente da mostrare.',
     f_title: 'Titolo', f_platform: 'Piattaforma', f_completed: 'Completato il', f_rating: 'Voto (0–10)', f_hours: 'Ore giocate', f_notes: 'Note',
-    igdb_ph: 'Cerca su IGDB per cambiare copertina…', search_btn: 'Cerca', delete: 'Elimina', cancel: 'Annulla', save: 'Salva',
+    igdb_ph: 'Cerca su IGDB per cambiare copertina…', igdb_will: 'Copertina da IGDB:', igdb_change: '· clicca un altro risultato qui sotto per cambiarla',
+    igdb_auto: 'Scrivi il titolo: qui compare la copertina da IGDB.', bad_rating: 'Voto: un numero da 0 a 10 (8,5 o 8.5)', bad_hours: 'Ore: un numero (12,5 o 12.5)', search_btn: 'Cerca', delete: 'Elimina', cancel: 'Annulla', save: 'Salva',
     from_plat: 'Dalla piattaforma ({s}): {h}', no_hours: 'ore non disponibili', ach_n: '{d}/{t} achievement',
     manual_wins: ' — le ore scritte qui hanno la precedenza', igdb_matched: 'Abbinato a IGDB:', manual_pick: '· scelto a mano',
     to_check: '· <b style="color:var(--mid)">da controllare</b>: se è giusto, cliccalo qui sotto per confermarlo', automatic: '· automatico',
@@ -849,8 +852,8 @@ function openDialog(g) {
   f.elements.title.value = g?.title ?? '';
   f.platform.value = g?.platform ?? '';
   f.completed_on.value = g?.completed_on ?? new Date().toISOString().slice(0, 10);
-  f.rating.value = g?.rating ?? '';
-  f.hours.value = g?.manual_hours ?? '';
+  f.rating.value = decStr(g?.rating);
+  f.hours.value = decStr(g?.manual_hours);
   f.hours.placeholder = g?.plat_hours != null ? `${g.plat_hours}` : '';
   $('#platInfo').textContent = g?.plat_source
     ? t('from_plat', {s: SRC[g.plat_source] || g.plat_source, h: g.plat_hours != null ? fmtHours(g.plat_hours) : t('no_hours')})
@@ -858,8 +861,10 @@ function openDialog(g) {
     : '';
   f.notes.value = g?.notes ?? '';
   $('#btnDel').hidden = !g;
-  $('#igdbBox').hidden = !g || !cfg.igdb;   // a new game is matched automatically on save
+  $('#igdbBox').hidden = !cfg.igdb;
   $('#igdbRes').innerHTML = '';
+  pick = null; userPicked = false; lastRes = [];
+  if (!g) { $('#igdbQ').value = ''; showPick(); }   // new game: preview of the match while typing the title
   if (g) {
     $('#igdbQ').value = g.title;
     $('#igdbCur').innerHTML = g.igdb_id
@@ -870,14 +875,21 @@ function openDialog(g) {
   $('#dlg').showModal();
 }
 
+// decimals: "8,5" and "8.5" are the same; shown with the language's separator
+const decNum = v => v.trim() === '' ? null : Number(v.trim().replace(',', '.'));
+const decStr = v => v == null ? '' : lang === 'it' ? String(v).replace('.', ',') : String(v);
+
 $('#form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
+  const rating = decNum(f.rating.value), hours = decNum(f.hours.value);
+  if (rating != null && !(rating >= 0 && rating <= 10)) { toast(t('bad_rating'), 4000); f.rating.focus(); return; }
+  if (hours != null && !(hours >= 0)) { toast(t('bad_hours'), 4000); f.hours.focus(); return; }
   const body = {
     title: f.elements.title.value, platform: f.platform.value,
-    completed_on: f.completed_on.value || null, rating: f.rating.value === '' ? null : Number(f.rating.value),
-    hours: f.hours.value === '' ? null : Number(f.hours.value),
+    completed_on: f.completed_on.value || null, rating, hours,
     notes: f.notes.value || null,
+    igdb_id: !editing && pick ? pick.id : null,   // new game: the cover picked in the dialog
   };
   try {
     if (confirming) {
@@ -909,22 +921,52 @@ $('#btnDel').onclick = async () => {
 $('#btnCancel').onclick = () => $('#dlg').close();
 $('#btnAdd').onclick = () => openDialog(null);
 
+let pick = null, userPicked = false, lastRes = [], titleTimer = null;   // new game: the IGDB match to use
+const igdbImg = id => `https://images.igdb.com/igdb/image/upload/t_cover_small/${id}.jpg`;
+function showPick() {
+  if (editing) return;
+  $('#igdbCur').innerHTML = pick
+    ? `${pick.cover_id ? `<img src="${igdbImg(pick.cover_id)}">` : ''}<span>${t('igdb_will')} <b>${esc(pick.name)}</b>${pick.year ? ` (${pick.year})` : ''} ${t('igdb_change')}</span>`
+    : `<span>${t('igdb_auto')}</span>`;
+  $$('#igdbRes [data-igdb]').forEach(d => d.classList.toggle('sel', !!pick && Number(d.dataset.igdb) === pick.id));
+}
 async function igdbSearch() {
   const q = $('#igdbQ').value.trim();
   if (!q) return;
   $('#igdbRes').textContent = t('searching');
   try {
     const res = await api('/api/igdb/search?q=' + encodeURIComponent(q) + '&platform=' + encodeURIComponent($('#form').platform.value));
+    lastRes = res;
     $('#igdbRes').innerHTML = res.length ? res.map(r => `<div data-igdb="${r.id}" title="${esc(r.platforms.join(', '))}">
-        ${r.cover_id ? `<img loading="lazy" src="https://images.igdb.com/igdb/image/upload/t_cover_small/${r.cover_id}.jpg">` : '<span class="ph"></span>'}
+        ${r.cover_id ? `<img loading="lazy" src="${igdbImg(r.cover_id)}">` : '<span class="ph"></span>'}
         ${esc(r.name)}${r.year ? ` (${r.year})` : ''}</div>`).join('') : t('no_results');
+    if (!editing && !userPicked) pick = res[0] || null;   // best ranked (title, platform, popularity)
+    showPick();
   } catch (err) { $('#igdbRes').textContent = t('error') + err.message; }
 }
+function titleSearch() {   // new game: search IGDB a moment after the title (or platform) stops changing
+  if (editing || !cfg.igdb) return;
+  clearTimeout(titleTimer);
+  titleTimer = setTimeout(() => {
+    const title = $('#form').elements.title.value.trim();
+    if (title.length < 2) return;
+    $('#igdbQ').value = title;
+    igdbSearch();
+  }, 600);
+}
+$('#form').elements.title.addEventListener('input', () => { userPicked = false; titleSearch(); });
+$('#form').platform.addEventListener('change', titleSearch);
 $('#igdbGo').onclick = igdbSearch;
 $('#igdbQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); igdbSearch(); } });
 $('#igdbRes').addEventListener('click', async e => {
   const d = e.target.closest('[data-igdb]');
-  if (!d || !editing) return;
+  if (!d) return;
+  if (!editing) {   // new game: just remember the choice, applied on save
+    pick = lastRes.find(r => r.id === Number(d.dataset.igdb)) || null;
+    userPicked = true;
+    showPick();
+    return;
+  }
   try {
     editing = await api(`/api/games/${editing.id}/match`, {method: 'POST', body: JSON.stringify({igdb_id: Number(d.dataset.igdb)})});
     await load();
@@ -1170,6 +1212,7 @@ document.addEventListener('click', async e => {   // candidate buttons, in Platf
     f.hours.placeholder = c.hours != null ? `${c.hours}` : '';
     $('#platInfo').textContent = (c.hours != null ? t('from_plat', {s: SRC[c.source], h: fmtHours(c.hours)}) : '')
       + (c.ach_total ? ' · ' + t('ach_n', {d: c.ach_done, t: c.ach_total}) : '');
+    titleSearch();
     f.rating.focus();
     return;
   }
