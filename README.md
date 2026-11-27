@@ -5,14 +5,16 @@
 **A self-hosted log of the games you finished.** For each game you keep the title, platform, completion
 date, a 0–10 rating and notes. Covers, official names and release years come from IGDB.
 
-Epilogg can also look through your **Steam, Xbox, PlayStation, Epic, GOG and RetroAchievements** accounts and suggest games you have
+Epilogg can also look through your **Steam, Xbox, PlayStation, Epic, GOG, RetroAchievements and Nintendo Switch** accounts and suggest games you have
 probably finished. It reads the achievements and trophies with their dates (story-ending achievement,
 platinum, 100%) and shows the suggestions in a list. You confirm or dismiss each one: nothing goes into
 your log automatically.
 
 - Grid of covers with filters (year, platform, rating) and sorting
 - Hours played and achievements for every game, plus a platinum badge when everything is unlocked
-- **Year in review**: one year or all time, with:
+- Tabs: **Completed** (your log), **Not completed** (platform games you dismissed), **Platforms** (games to review),
+  **Stats**
+- **Stats** (year in review): one year or all time, with:
   - games finished per month;
   - platforms and the rating distribution;
   - your top-rated games;
@@ -61,6 +63,7 @@ again.
 | Xbox / PC Game Pass | An [OpenXBL](https://xbl.io) API key: sign in with your Microsoft account, then "API Keys". The free plan allows 150 requests/hour, so the first full sync can take a few hours. |
 | RetroAchievements | Username and the "Web API Key" from your [settings](https://retroachievements.org/controlpanel.php). "Beaten" awards are used as story-end hints, with their date. |
 | Epic Games | "Sign in", then paste the `authorizationCode` Epic shows. You get play time and achievements. Unofficial API, the same one Legendary/Heroic and Playnite use. |
+| Nintendo Switch | Play time from the **Parental Controls** app. Pair the console with the app on your phone first; no restrictions are needed. Then click "Sign in", right-click "Select this person" → copy link, and paste it. Nintendo keeps only the last few weeks, so Epilogg stores every day it sees and the history grows from the pairing day on. Unofficial API, as nxapi uses. |
 | GOG | "Sign in", then paste the address of the page you land on (it contains `code=`). You get achievements but no play time, so only games with at least one achievement are listed. Unofficial Galaxy API. |
 | PlayStation | The `npsso` value from [ca.account.sony.com/api/v1/ssocookie](https://ca.account.sony.com/api/v1/ssocookie), read while signed in on playstation.com. It lasts about two months. |
 

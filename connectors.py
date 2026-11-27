@@ -32,7 +32,7 @@ ENV_STEAM_KEY = os.environ.get("STEAM_API_KEY", "")
 ENV_CREDS = {"steam_id": os.environ.get("STEAM_ID", ""), "xbl_key": os.environ.get("XBL_API_KEY", ""),
              "psn_npsso": os.environ.get("PSN_NPSSO", "")}
 CRED_KEYS = ("steam_id", "steam_key", "xbl_key", "psn_npsso", "ra_user", "ra_key")   # typed in the settings
-LINKED = ("gog_token", "epic_token")   # set by signing in (gog_link / epic_link)
+LINKED = ("gog_token", "epic_token", "nintendo_token")   # set by signing in (gog_link / epic_link)
 
 
 def psn_token_file(uid: int) -> str:   # PSN session token (refreshes itself)
@@ -128,7 +128,8 @@ def configured(uid: int) -> dict:
     c = creds(uid)
     return {"steam": bool(c.get("steam_key") and c.get("steam_id")), "xbox": bool(c.get("xbl_key")),
             "psn": bool(c.get("psn_npsso")), "ra": bool(c.get("ra_user") and c.get("ra_key")),
-            "gog": bool(c.get("gog_token")), "epic": bool(c.get("epic_token"))}
+            "gog": bool(c.get("gog_token")), "epic": bool(c.get("epic_token")),
+            "nintendo": bool(c.get("nintendo_token"))}
 
 
 def set_state(uid, source, status, message=None, ok=False):
@@ -561,7 +562,7 @@ GOG_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9" 
 GOG_REDIRECT = "https://embed.gog.com/on_login_success?origin=client"
 
 
-def gog_login_url() -> str:
+def gog_login_url(uid=None) -> str:
     from urllib.parse import urlencode
     return "https://auth.gog.com/auth?" + urlencode({"client_id": GOG_CLIENT, "redirect_uri": GOG_REDIRECT,
                                                      "response_type": "code", "layout": "client2"})
@@ -731,9 +732,148 @@ def sync_epic(uid, cr):
                          "signal": sig, "signal_label": label, "signal_date": sdate, "fingerprint": fp})
     return msg("epic_ok", n=len(records), f=fetched)
 
+# --- Nintendo Switch (Parental Controls app API, as nxapi does) -------------------
+# Only play time from the day the console is paired with the Parental Controls app: Nintendo keeps the daily
+# summaries for a few weeks, so every sync stores them in nintendo_play and the history builds up here.
+
+NX_CLIENT = "54789befb391a838"
+NX_SCOPE = ("openid user user.mii moonUser:administration moonDevice:create moonOwnedDevice:administration "
+            "moonParentalControlSetting moonParentalControlSetting:update moonParentalControlSettingState "
+            "moonPairingState moonSmartDevice:administration moonDailySummary moonMonthlySummary")
+NX_MOON = "https://api-lp1.pctl.srv.nintendo.net/moon"
+NX_VERSION, NX_BUILD = "1.17.0", "261"
+NX_HEADERS = {"Cache-Control": "no-store", "X-Moon-App-Id": "com.nintendo.znma", "X-Moon-Os": "ANDROID",
+              "X-Moon-Os-Version": "26", "X-Moon-Model": "", "X-Moon-TimeZone": os.environ.get("TZ", "Europe/London"),
+              "X-Moon-Os-Language": "en-GB", "X-Moon-App-Language": "en-GB",
+              "X-Moon-App-Display-Version": NX_VERSION, "X-Moon-App-Internal-Version": NX_BUILD,
+              "User-Agent": f"moon_ANDROID/{NX_VERSION} (com.nintendo.znma; build:{NX_BUILD}; ANDROID 26)"}
+
+
+def _b64(b: bytes) -> str:
+    import base64
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def nintendo_login_url(uid) -> str:
+    """Nintendo account sign-in for the Parental Controls app (PKCE); the verifier waits in the credentials."""
+    import hashlib
+    import secrets
+    from urllib.parse import urlencode
+    state, verifier = _b64(secrets.token_bytes(36)), _b64(secrets.token_bytes(32))
+    set_cred(uid, "nintendo_pending", json.dumps({"state": state, "verifier": verifier}))
+    return "https://accounts.nintendo.com/connect/1.0.0/authorize?" + urlencode({
+        "state": state, "redirect_uri": f"npf{NX_CLIENT}://auth", "client_id": NX_CLIENT, "scope": NX_SCOPE,
+        "response_type": "session_token_code", "session_token_code_challenge": _b64(hashlib.sha256(verifier.encode()).digest()),
+        "session_token_code_challenge_method": "S256", "theme": "login_form"})
+
+
+def nintendo_link(uid, pasted: str):
+    """pasted = the "Select this person" link (npf54789befb391a838://auth#session_token_code=…&state=…)."""
+    from urllib.parse import parse_qs
+    pending = token_of(creds(uid), "nintendo_pending")
+    frag = parse_qs(pasted.strip().split("#", 1)[-1])
+    code = (frag.get("session_token_code") or [None])[0]
+    if not pending or not code or (frag.get("state") or [None])[0] != pending.get("state"):
+        raise SyncError("nintendo_link")
+    r = httpx.post("https://accounts.nintendo.com/connect/1.0.0/api/session_token", timeout=30,
+                   headers={"Accept": "application/json", "User-Agent": "NASDKAPI; Android"},
+                   data={"client_id": NX_CLIENT, "session_token_code": code, "session_token_code_verifier": pending["verifier"]})
+    if r.status_code != 200 or "session_token" not in r.text:
+        raise SyncError("nintendo_link")
+    set_cred(uid, "nintendo_token", json.dumps({"session_token": r.json()["session_token"]}))
+    set_cred(uid, "nintendo_pending", None)
+
+
+def nintendo_access(client, cr) -> tuple[str, str]:
+    """session token -> (access token, Nintendo account id)."""
+    r = client.post("https://accounts.nintendo.com/connect/1.0.0/api/token",
+                    headers={"Accept": "application/json", "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 8.0.0)"},
+                    json={"client_id": NX_CLIENT, "session_token": token_of(cr, "nintendo_token").get("session_token"),
+                          "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer-session-token"})
+    if r.status_code != 200:
+        raise SyncError("nintendo_expired")
+    tok = r.json()["access_token"]
+    me = client.get("https://api.accounts.nintendo.com/2.0.0/users/me", headers={"Authorization": f"Bearer {tok}"})
+    me.raise_for_status()
+    return tok, me.json()["id"]
+
+
+def sync_nintendo(uid, cr):
+    with httpx.Client(timeout=30) as client:
+        tok, na_id = nintendo_access(client, cr)
+        h = {**NX_HEADERS, "Authorization": f"Bearer {tok}"}
+
+        def moon(path):
+            r = client.get(NX_MOON + path, headers=h)
+            if r.status_code == 429:
+                raise RateLimited("rate_nintendo")
+            r.raise_for_status()
+            return r.json()
+
+        devices = moon(f"/v1/users/{na_id}/devices").get("items") or []
+        if not devices:
+            raise SyncError("nintendo_nodevice")
+        titles = {}   # applicationId -> Title (name, image, first play on the console)
+        with db() as con:
+            for d in devices:
+                dev = d["deviceId"]
+                for s in moon(f"/v1/devices/{dev}/daily_summaries").get("items") or []:
+                    for t in s.get("playedApps") or []:
+                        titles[t["applicationId"]] = t
+                    secs = {}
+                    for p in (s.get("devicePlayers") or []) + ([s["anonymousPlayer"]] if s.get("anonymousPlayer") else []):
+                        for a in p.get("playedApps") or []:
+                            secs[a["applicationId"]] = secs.get(a["applicationId"], 0) + (a.get("playingTime") or 0)
+                    for app_id, sec in secs.items():
+                        con.execute("INSERT INTO nintendo_play (user_id, device_id, day, app_id, seconds) VALUES (?,?,?,?,?)"
+                                    " ON CONFLICT(user_id, device_id, day, app_id) DO UPDATE SET seconds=excluded.seconds",
+                                    (uid, dev, s["date"], app_id, sec))
+                daily_months = {x[0] for x in con.execute(
+                    "SELECT DISTINCT substr(day, 1, 7) FROM nintendo_play WHERE user_id=? AND device_id=?"
+                    " AND substr(day, 9, 2) != '00'", (uid, dev))}
+                for month in moon(f"/v1/devices/{dev}/monthly_summaries").get("indexes") or []:
+                    m = moon(f"/v1/devices/{dev}/monthly_summaries/{month}")
+                    for t in m.get("playedApps") or []:
+                        titles.setdefault(t["applicationId"], t)
+                    if month in daily_months:
+                        continue
+                    # months older than the daily summaries we have: their totals, stored on day "YYYY-MM-00"
+                    secs = {}
+                    for p in m.get("devicePlayers") or []:
+                        for a in p.get("playedApps") or []:
+                            if a.get("playingTime"):
+                                secs[a["applicationId"]] = secs.get(a["applicationId"], 0) + a["playingTime"]
+                    for app_id, sec in secs.items():
+                        con.execute("INSERT INTO nintendo_play (user_id, device_id, day, app_id, seconds) VALUES (?,?,?,?,?)"
+                                    " ON CONFLICT(user_id, device_id, day, app_id) DO UPDATE SET seconds=excluded.seconds",
+                                    (uid, dev, f"{month}-00", app_id, sec))
+        with db() as con:
+            # a month total ("-00") counts only while that month has no daily rows
+            rows = con.execute(
+                "SELECT app_id, SUM(seconds) secs, MIN(day) first, MAX(day) last FROM nintendo_play p"
+                " WHERE user_id=? AND seconds > 0 AND NOT (substr(day, 9, 2) = '00' AND EXISTS ("
+                "   SELECT 1 FROM nintendo_play q WHERE q.user_id = p.user_id AND q.device_id = p.device_id"
+                "   AND substr(q.day, 1, 7) = substr(p.day, 1, 7) AND substr(q.day, 9, 2) != '00'))"
+                " GROUP BY app_id", (uid,)).fetchall()
+            names = {r["ext_id"]: r for r in con.execute(
+                "SELECT ext_id, title, image_url FROM candidates WHERE user_id=? AND source='nintendo'", (uid,))}
+        for r in rows:
+            last = r["last"].replace("-00", "-01") if r["last"].endswith("-00") else r["last"]   # month total only
+            t = titles.get(r["app_id"]) or {}
+            old = names.get(r["app_id"])
+            title = t.get("title") or (old and old["title"]) or r["app_id"]
+            img = (t.get("imageUri") or {}).get("large") or (old and old["image_url"])
+            upsert(uid, {"source": "nintendo", "ext_id": r["app_id"], "title": title, "platform": "Switch",
+                         "image_url": img, "hours": round(r["secs"] / 3600, 1), "ach_done": None, "ach_total": None,
+                         "first_played": t.get("firstPlayDate") or r["first"].replace("-00", "-01"), "last_played": last,
+                         "signal": "played", "signal_label": None, "signal_date": last,
+                         "fingerprint": f"{r['secs']}|{r['last']}"})
+    return msg("nintendo_ok", n=len(rows), d=len(devices))
+
 # --- orchestration -------------------------------------------------------------
 
-SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn, "ra": sync_ra, "gog": sync_gog, "epic": sync_epic}
+SYNC = {"steam": sync_steam, "xbox": sync_xbox, "psn": sync_psn, "ra": sync_ra, "gog": sync_gog, "epic": sync_epic,
+        "nintendo": sync_nintendo}
 SCHEDULED = tuple(SYNC)
 
 

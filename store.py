@@ -84,6 +84,17 @@ CREATE TABLE IF NOT EXISTS candidates (
     UNIQUE (user_id, source, ext_id)
 );
 
+-- Nintendo play time per day (the Parental Controls app keeps only a few weeks): the history builds up here.
+-- day "YYYY-MM-00" = monthly total, used only for months without daily rows
+CREATE TABLE IF NOT EXISTS nintendo_play (
+    user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id TEXT NOT NULL,
+    day       TEXT NOT NULL,
+    app_id    TEXT NOT NULL,
+    seconds   INTEGER NOT NULL,
+    PRIMARY KEY (user_id, device_id, day, app_id)
+);
+
 CREATE TABLE IF NOT EXISTS sync_state (
     user_id  INTEGER REFERENCES users(id) ON DELETE CASCADE,
     source   TEXT NOT NULL,

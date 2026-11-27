@@ -113,7 +113,8 @@ PLATFORM_HINT = {"Steam": {"PC"}, "PC": {"PC"}, "Game Pass": {"PC", "Series X|S"
                  "Xbox": {"XBOX", "X360", "XONE", "Series X|S"}, "Xbox 360": {"X360"},
                  "PS Vita": {"Vita"}, "PSP": {"PSP"}, "GOG": {"PC"}, "Epic": {"PC"},
                  "NES": {"NES"}, "SNES": {"SNES"}, "N64": {"N64"}, "Game Boy": {"GB"}, "GBC": {"GBC"}, "NDS": {"NDS"},
-                 "GameCube": {"NGC"}, "Mega Drive": {"Genesis/MegaDrive"}, "Master System": {"SMS"}}
+                 "GameCube": {"NGC"}, "Mega Drive": {"Genesis/MegaDrive"}, "Master System": {"SMS"},
+                 "Switch 2": {"NS2", "Switch 2", "Switch"}}
 
 
 def similarity(title: str, name: str) -> float:
@@ -353,7 +354,8 @@ def get_credentials(request: Request):
 
 
 LINKS = {"gog": (connectors.gog_login_url, connectors.gog_link, "gog_token"),
-         "epic": (lambda: connectors.EPIC_LOGIN, connectors.epic_link, "epic_token")}
+         "epic": (lambda uid: connectors.EPIC_LOGIN, connectors.epic_link, "epic_token"),
+         "nintendo": (connectors.nintendo_login_url, connectors.nintendo_link, "nintendo_token")}
 
 
 class LinkIn(BaseModel):
@@ -361,11 +363,11 @@ class LinkIn(BaseModel):
 
 
 @app.get("/api/link/{source}")
-def link_url(source: str):
+def link_url(source: str, request: Request):
     """Sign-in page of a platform that has no API key: the user signs in there and pastes back what it shows."""
     if source not in LINKS:
         raise HTTPException(404, "not_found")
-    return {"url": LINKS[source][0]()}
+    return {"url": LINKS[source][0](uid(request))}
 
 
 @app.post("/api/link/{source}")
@@ -384,7 +386,7 @@ def link(source: str, body: LinkIn, request: Request):
 def unlink(source: str, request: Request):
     if source not in LINKS:
         raise HTTPException(404, "not_found")
-    connectors.set_cred(uid(request), LINKS[source][2], None)
+    connectors.set_cred(uid(request), LINKS[source][2], None)   # Nintendo play history stays: relinking continues it
     return get_credentials(request)
 
 

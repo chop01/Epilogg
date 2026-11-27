@@ -230,8 +230,9 @@
 
 <nav class="tabs">
   <button id="tabReg" class="on" data-i18n="tab_log"></button>
-  <button id="tabRv" data-i18n="tab_review"></button>
+  <button id="tabNc" data-i18n="tab_notdone"></button>
   <button id="tabCand"><span data-i18n="tab_platforms"></span> <span id="nCand"></span></button>
+  <button id="tabRv" data-i18n="tab_review"></button>
 </nav>
 
 <div id="regView">
@@ -269,6 +270,16 @@
 <div class="empty" id="empty" hidden data-i18n="no_games"></div>
 </div>
 
+<div id="ncView" hidden>
+  <section class="filters">
+    <input type="search" id="nq" data-i18n-ph="search">
+    <select id="nSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option></select>
+  </section>
+  <div class="hint" style="padding:0 24px;color:var(--muted);font-size:13px" data-i18n="nc_hint"></div>
+  <div class="clist" id="nclist"></div>
+  <div class="empty" id="ncempty" hidden data-i18n="nothing"></div>
+</div>
+
 <div id="rvView" hidden>
   <div class="rv" id="rv"></div>
 </div>
@@ -279,10 +290,9 @@
     <input type="search" id="cq" data-i18n-ph="search">
     <select id="cStatus">
       <option value="new" data-i18n="c_new"></option>
-      <option value="dismissed" data-i18n="c_dismissed"></option>
       <option value="confirmed" data-i18n="c_confirmed"></option>
     </select>
-    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option></select>
+    <select id="cSrc"><option value="" data-i18n="all_sources"></option><option value="steam">Steam</option><option value="xbox">Xbox</option><option value="psn">PlayStation</option><option value="epic">Epic</option><option value="gog">GOG</option><option value="ra">RetroAchievements</option><option value="nintendo">Nintendo</option></select>
     <select id="cSig" data-i18n-title="sig_title">
       <option value="strong" data-i18n="sig_strong"></option>
       <option value="any" data-i18n="sig_any"></option>
@@ -375,6 +385,10 @@
           <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
         <div class="hint" data-i18n-html="h_epic"></div>
         <div class="row"><input data-code style="flex:1;min-width:0" data-i18n-ph="paste_epic"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
+      <div class="link" data-src="nintendo"><div class="row" style="align-items:center"><b style="margin-right:auto">Nintendo Switch <span class="cst" data-k="nintendo_token"></span></b>
+          <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
+        <div class="hint" data-i18n-html="h_nintendo"></div>
+        <div class="row"><input data-code style="flex:1;min-width:0" data-i18n-ph="paste_nintendo"><button type="button" data-linkbtn data-i18n="link_btn"></button></div></div>
       <div class="link" data-src="gog"><div class="row" style="align-items:center"><b style="margin-right:auto">GOG <span class="cst" data-k="gog_token"></span></b>
           <button type="button" data-signin data-i18n="signin_btn"></button><button type="button" class="danger" data-unlink data-i18n="unlink_btn"></button></div>
         <div class="hint" data-i18n-html="h_gog"></div>
@@ -419,7 +433,8 @@ const I18N = {
     login: 'Sign in', create_admin: 'Create account', pw_mismatch: 'The passwords do not match', pw_short: 'At least 8 characters',
     covers_btn: 'Missing covers', covers_title: 'Match games without a cover on IGDB', export_btn: 'Export CSV',
     add_btn: ' Add', add_title: 'Add a game', settings: 'Settings',
-    tab_log: 'Log', tab_review: 'Year in review', tab_platforms: 'From platforms',
+    tab_log: 'Completed', tab_notdone: 'Not completed', tab_review: 'Stats', tab_platforms: 'Platforms',
+    nc_hint: 'Games from your platforms that you marked as not completed. "Restore" puts one back among those to review.',
     completed: 'completed', avg_rating: 'average rating', in_year: 'in {y}', years_title: 'Click a year to filter',
     search: 'Search title…', all_years: 'All years', all_platforms: 'All platforms', all_ratings: 'All ratings',
     r9: '9 and up', r8: '8 and up', r7: '7 and up', r6: '6 and up', rlow: 'Below 6', rnone: 'Not rated',
@@ -459,6 +474,8 @@ const I18N = {
     h_ra: 'Username and the "Web API Key" from your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">RetroAchievements settings</a>. "Beaten" awards become story-end hints with their date.',
     h_epic: '1. "Sign in" opens Epic in a new tab. 2. After signing in you get a page of text: copy the value of <code>authorizationCode</code> (or the whole page). 3. Paste it here and click "Link" within a few minutes. Play time and achievements; unofficial API, like Heroic and Playnite use.',
     h_gog: '1. "Sign in" opens GOG in a new tab. 2. After signing in you land on a mostly empty page: copy its whole address from the address bar (it contains <code>code=</code>). 3. Paste it here and click "Link". Achievements only (GOG does not share play time), so only games with at least one achievement show up.',
+    h_nintendo: 'Play time from the <b>Nintendo Switch Parental Controls</b> app: pair your Switch with the app on your phone first (no restrictions needed). Nintendo keeps only the last weeks, so the history starts on the day of pairing and grows here with every sync. 1. "Sign in" opens Nintendo in a new tab. 2. On "Select this person", right-click (long press on a phone) → copy link. 3. Paste it here and click "Link" within a few minutes. Unofficial API, as nxapi uses.',
+    paste_nintendo: 'npf54789befb391a838://auth#session_token_code=…', sig_played: '🎮 Last played',
     signin_btn: 'Sign in', link_btn: 'Link', unlink_btn: 'Unlink', linked_ok: 'Account linked. Syncing…', unlinked: 'Account unlinked',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ linked',
     s_homepage: 'Homepage widget', h_homepage: 'A read-only token for <code>/api/stats</code> (completed this year, total, to review). Generating a new one replaces the old one.',
@@ -479,13 +496,16 @@ const I18N = {
       setup_done: 'Setup already done: sign in', user_exists: 'This username already exists', bad_password: 'The current password is wrong',
       admin_only: 'Administrators only', self_delete: 'You cannot delete yourself', not_found: 'Not found', igdb_off: 'IGDB is not configured',
       not_configured: 'Set up the account in Settings first', gog_expired: 'GOG did not accept the code: sign in again and paste the new address',
-      epic_expired: 'Epic did not accept the code (it expires after a few minutes): sign in again', csv_empty: 'The file has no rows',
+      epic_expired: 'Epic did not accept the code (it expires after a few minutes): sign in again',
+      nintendo_link: 'Nintendo did not accept the link: click "Sign in" again and copy the new "Select this person" link', csv_empty: 'The file has no rows',
       csv_columns: 'Title and platform columns not found in the first row', csv_too_big: 'Too many rows (max 5000)',
       missing_title_platform: 'title or platform missing', bad_date: 'date not recognised'},
     sync: {steam_ok: '{n} games in library, {f} updated', xbox_ok: '{n} titles, {f} updated', psn_ok: '{n} games with trophies, {f} updated',
       rate_steam: 'Steam: too many requests, resumes in an hour', rate_xbox: 'OpenXBL: hourly limit reached, resumes in an hour',
       rate_psn: 'PSN: too many requests, resumes in an hour', steam_badkey: 'Steam: the API key is not valid',
       steam_noid: 'Steam ID "{id}" not found (use the SteamID64 or profile name)', steam_private: 'Steam does not return the library: profile and "Game details" must be public',
+      nintendo_ok: '{n} games played on {d} console(s)', nintendo_expired: 'Nintendo: sign-in expired, link the account again in Settings',
+      nintendo_nodevice: 'Nintendo: no console paired with the Parental Controls app', rate_nintendo: 'Nintendo: too many requests, resumes in an hour',
       ra_ok: '{n} games with progress', gog_ok: '{n} games in library, {f} checked', epic_ok: '{n} items in library, {f} updated',
       rate_ra: 'RetroAchievements: too many requests, resumes in an hour', rate_gog: 'GOG: too many requests, resumes in an hour',
       ra_badkey: 'RetroAchievements: username or API key not valid', gog_expired: 'GOG: sign-in expired, link the account again in Settings',
@@ -500,7 +520,8 @@ const I18N = {
     login: 'Accedi', create_admin: 'Crea account', pw_mismatch: 'Le password non coincidono', pw_short: 'Almeno 8 caratteri',
     covers_btn: 'Copertine mancanti', covers_title: 'Abbina a IGDB i giochi senza copertina', export_btn: 'Esporta CSV',
     add_btn: ' Aggiungi', add_title: 'Aggiungi un gioco', settings: 'Impostazioni',
-    tab_log: 'Registro', tab_review: "Il tuo anno", tab_platforms: 'Dalle piattaforme',
+    tab_log: 'Completati', tab_notdone: 'Non completati', tab_review: 'Statistiche', tab_platforms: 'Piattaforme',
+    nc_hint: 'I giochi delle piattaforme che hai segnato come non completati. "Ripristina" lo rimette tra quelli da valutare.',
     completed: 'completati', avg_rating: 'voto medio', in_year: 'nel {y}', years_title: 'Clic su un anno per filtrare',
     search: 'Cerca titolo…', all_years: 'Tutti gli anni', all_platforms: 'Tutte le piattaforme', all_ratings: 'Tutti i voti',
     r9: 'Da 9 in su', r8: 'Da 8 in su', r7: 'Da 7 in su', r6: 'Da 6 in su', rlow: 'Sotto il 6', rnone: 'Senza voto',
@@ -540,6 +561,8 @@ const I18N = {
     h_ra: 'Nome utente e "Web API Key" dalle <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">impostazioni di RetroAchievements</a>. I premi "Beaten" diventano indizi di fine storia con la loro data.',
     h_epic: '1. "Accedi" apre Epic in una nuova scheda. 2. Dopo l\'accesso compare una pagina di testo: copia il valore di <code>authorizationCode</code> (o tutta la pagina). 3. Incollalo qui e premi "Collega" entro pochi minuti. Ore giocate e achievement; API non ufficiale, la stessa di Heroic e Playnite.',
     h_gog: '1. "Accedi" apre GOG in una nuova scheda. 2. Dopo l\'accesso arrivi su una pagina quasi vuota: copia il suo indirizzo intero dalla barra (contiene <code>code=</code>). 3. Incollalo qui e premi "Collega". Solo achievement (GOG non fornisce le ore), quindi compaiono solo i giochi con almeno un achievement.',
+    h_nintendo: 'Ore di gioco dall\'app <b>Nintendo Switch Parental Controls</b> (Controllo genitori): prima abbina la Switch all\'app sul telefono (non servono restrizioni). Nintendo conserva solo le ultime settimane, quindi lo storico parte dal giorno dell\'abbinamento e cresce qui a ogni sincronizzazione. 1. "Accedi" apre Nintendo in una nuova scheda. 2. Su "Seleziona questa persona" clic destro (pressione lunga sul telefono) → copia link. 3. Incollalo qui e premi "Collega" entro pochi minuti. API non ufficiale, la stessa di nxapi.',
+    paste_nintendo: 'npf54789befb391a838://auth#session_token_code=…', sig_played: '🎮 Ultima partita',
     signin_btn: 'Accedi', link_btn: 'Collega', unlink_btn: 'Scollega', linked_ok: 'Account collegato. Sincronizzo…', unlinked: 'Account scollegato',
     paste_epic: 'authorizationCode…', paste_gog: 'https://embed.gog.com/on_login_success?…code=…', is_linked: '✓ collegato',
     s_homepage: 'Widget di Homepage', h_homepage: 'Token in sola lettura per <code>/api/stats</code> (completati quest\'anno, totale, da valutare). Generarne uno nuovo sostituisce il vecchio.',
@@ -560,13 +583,16 @@ const I18N = {
       setup_done: 'Configurazione già fatta: accedi', user_exists: 'Questo nome utente esiste già', bad_password: 'La password attuale è sbagliata',
       admin_only: 'Solo per amministratori', self_delete: 'Non puoi eliminare te stesso', not_found: 'Non trovato', igdb_off: 'IGDB non è configurato',
       not_configured: "Configura prima l'account nelle Impostazioni", gog_expired: "GOG non ha accettato il codice: accedi di nuovo e incolla il nuovo indirizzo",
-      epic_expired: "Epic non ha accettato il codice (scade dopo pochi minuti): accedi di nuovo", csv_empty: 'Il file non ha righe',
+      epic_expired: "Epic non ha accettato il codice (scade dopo pochi minuti): accedi di nuovo",
+      nintendo_link: 'Nintendo non ha accettato il link: premi di nuovo "Accedi" e copia il nuovo link di "Seleziona questa persona"', csv_empty: 'Il file non ha righe',
       csv_columns: 'Colonne titolo e piattaforma non trovate nella prima riga', csv_too_big: 'Troppe righe (max 5000)',
       missing_title_platform: 'manca titolo o piattaforma', bad_date: 'data non riconosciuta'},
     sync: {steam_ok: '{n} giochi in libreria, {f} aggiornati', xbox_ok: '{n} titoli, {f} aggiornati', psn_ok: '{n} giochi con trofei, {f} aggiornati',
       rate_steam: "Steam: troppe richieste, riprende tra un'ora", rate_xbox: "OpenXBL: limite orario raggiunto, riprende tra un'ora",
       rate_psn: "PSN: troppe richieste, riprende tra un'ora", steam_badkey: 'Steam: la chiave API non è valida',
       steam_noid: 'Steam ID "{id}" non trovato (serve lo SteamID64 o il nome del profilo)', steam_private: "Steam non restituisce la libreria: profilo e 'Dettagli di gioco' devono essere pubblici",
+      nintendo_ok: '{n} giochi giocati su {d} console', nintendo_expired: "Nintendo: accesso scaduto, ricollega l'account nelle Impostazioni",
+      nintendo_nodevice: "Nintendo: nessuna console abbinata all'app Controllo genitori", rate_nintendo: "Nintendo: troppe richieste, riprende tra un'ora",
       ra_ok: '{n} giochi con progressi', gog_ok: '{n} giochi in libreria, {f} controllati', epic_ok: '{n} elementi in libreria, {f} aggiornati',
       rate_ra: "RetroAchievements: troppe richieste, riprende tra un'ora", rate_gog: "GOG: troppe richieste, riprende tra un'ora",
       ra_badkey: 'RetroAchievements: nome utente o chiave API non validi', gog_expired: "GOG: accesso scaduto, ricollega l'account nelle Impostazioni",
@@ -615,7 +641,7 @@ const coverUrl = g => g.cover ? `/covers/${encodeURIComponent(g.cover)}` : '';
 // cup with a platinum gradient (not the emoji, which is gold)
 const PLAT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#pg)" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1 1.7V7Zm10 0v2.7A2 2 0 0 0 18 8V7h-1ZM6 20h12v2H6z"/></svg>`;
 const avg = list => { const v = list.filter(g => g.rating != null); return v.length ? (v.reduce((a, g) => a + g.rating, 0) / v.length).toFixed(1) : '–'; };
-const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', epic: 'Epic', gog: 'GOG', ra: 'RetroAchievements'};
+const SRC = {steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', epic: 'Epic', gog: 'GOG', ra: 'RetroAchievements', nintendo: 'Nintendo'};
 
 // --- sign-in -----------------------------------------------------------------------
 let setupMode = false;
@@ -765,7 +791,8 @@ $('#form').addEventListener('submit', async e => {
       await api(`/api/candidates/${id}/confirm`, {method: 'POST', body: JSON.stringify(body)});
       $('#dlg').close();
       cands = cands.filter(x => x.id !== id);
-      renderCands();
+      ncs = ncs.filter(x => x.id !== id);
+      renderCands(); renderNc();
       loadSync();
       toast(t('added_log'));
       await load();
@@ -839,17 +866,19 @@ $('#years').addEventListener('click', e => {
 let tab = 'reg';
 $('#tabReg').onclick = () => showTab('reg');
 $('#tabRv').onclick = () => showTab('rv');
+$('#tabNc').onclick = () => showTab('nc');
 $('#tabCand').onclick = () => showTab('cand');
 function showTab(x) {
   tab = x;
-  ['reg', 'rv', 'cand'].forEach(k => {
-    $('#tab' + {reg: 'Reg', rv: 'Rv', cand: 'Cand'}[k]).classList.toggle('on', k === x);
+  ['reg', 'nc', 'rv', 'cand'].forEach(k => {
+    $('#tab' + {reg: 'Reg', nc: 'Nc', rv: 'Rv', cand: 'Cand'}[k]).classList.toggle('on', k === x);
     $('#' + k + 'View').hidden = k !== x;
   });
   $('#btnAdd').hidden = x !== 'reg';
   $('#btnCovers').hidden = x !== 'reg' || !cfg.igdb;
   if (x === 'cand') { loadSync(); loadCands(); }
   if (x === 'rv') renderReview();
+  if (x === 'nc') loadNc();
 }
 
 // --- year in review --------------------------------------------------------------
@@ -987,30 +1016,42 @@ function renderCands() {
   const q = $('#cq').value.trim().toLowerCase(), src = $('#cSrc').value, sig = $('#cSig').value;
   const list = cands.filter(c => (!src || c.source === src) && (!q || c.title.toLowerCase().includes(q))
     && (sig === '' || (sig === 'any' ? c.signal : STRONG.has(c.signal))));
-  const st = $('#cStatus').value;
-  $('#clist').innerHTML = list.map(c => {
-    const ach = c.ach_total ? t('ach_n', {d: c.ach_done, t: c.ach_total}) : t('no_ach');
+  $('#clist').innerHTML = list.map(c => candRow(c, $('#cStatus').value)).join('');
+  $('#cempty').hidden = list.length > 0;
+}
+let ncs = [];   // not completed (dismissed candidates)
+async function loadNc() {
+  ncs = await api('/api/candidates?status=dismissed');
+  renderNc();
+}
+function renderNc() {
+  const q = $('#nq').value.trim().toLowerCase(), src = $('#nSrc').value;
+  const list = ncs.filter(c => (!src || c.source === src) && (!q || c.title.toLowerCase().includes(q)));
+  $('#nclist').innerHTML = list.map(c => candRow(c, 'dismissed')).join('');
+  $('#ncempty').hidden = list.length > 0;
+}
+['#nq', '#nSrc'].forEach(s => $(s).addEventListener('input', renderNc));
+function candRow(c, st) {
+    const ach = c.ach_total ? t('ach_n', {d: c.ach_done, t: c.ach_total}) : c.source === 'nintendo' ? '' : t('no_ach');   // no achievements on Switch
     const label = c.signal === '100' || !c.signal_label ? '' : `: <i>${esc(c.signal_label)}</i>`;
     const sigTxt = c.signal === 'last' ? `${t('sig_last')}${label} · ${fmtDate(c.signal_date)} <span style="color:var(--muted)">${t('weak')}</span>`
       : c.signal ? `${t('sig_' + c.signal)}${label} · ${fmtDate(c.signal_date)}` : t('no_signal');
     const btns = st === 'new' ? `<button class="primary" data-ok="${c.id}">${t('btn_done')}</button><button data-dis="${c.id}">${t('btn_notdone')}</button>`
-      : st === 'dismissed' ? `<button data-res="${c.id}">${t('btn_restore')}</button>` : '';
+      : st === 'dismissed' ? `<button class="primary" data-ok="${c.id}">${t('btn_done')}</button><button data-res="${c.id}">${t('btn_restore')}</button>` : '';
     return `<div class="cand">
       ${c.image_url ? `<img loading="lazy" src="${esc(c.image_url)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph'}))">` : '<span class="ph"></span>'}
       <div><div class="t">${esc(c.title)}</div>
-        <div class="s"><span class="badge">${esc(c.platform)}</span>${c.hours != null ? `${c.hours} h · ` : ''}${ach}${c.last_played ? t('last_played', {d: fmtDate(c.last_played)}) : ''}</div>
+        <div class="s"><span class="badge">${esc(c.platform)}</span>${[c.hours != null ? `${c.hours} h` : '', ach].filter(Boolean).join(' · ')}${c.last_played ? t('last_played', {d: fmtDate(c.last_played)}) : ''}</div>
         <div class="sig ${c.signal ? '' : 'none'}">${sigTxt}</div></div>
       <div class="btns">${btns}</div></div>`;
-  }).join('');
-  $('#cempty').hidden = list.length > 0;
 }
 ['#cq', '#cSrc', '#cSig'].forEach(s => $(s).addEventListener('input', renderCands));
 $('#cStatus').addEventListener('input', loadCands);
-$('#clist').addEventListener('click', async e => {
-  const b = e.target.closest('button');
+document.addEventListener('click', async e => {   // candidate buttons, in Platforms and Not completed
+  const b = e.target.closest('.clist button');
   if (!b) return;
   if (b.dataset.ok) {
-    const c = cands.find(x => x.id === Number(b.dataset.ok));
+    const c = [...cands, ...ncs].find(x => x.id === Number(b.dataset.ok));
     confirming = c;
     openDialog(null);
     const f = $('#form');
@@ -1027,7 +1068,8 @@ $('#clist').addEventListener('click', async e => {
   const id = b.dataset.dis || b.dataset.res;
   await api(`/api/candidates/${id}/${b.dataset.dis ? 'dismiss' : 'restore'}`, {method: 'POST'});
   cands = cands.filter(x => x.id !== Number(id));
-  renderCands();
+  ncs = ncs.filter(x => x.id !== Number(id));
+  renderCands(); renderNc();
   loadSync();
 });
 $('#dlg').addEventListener('close', () => { confirming = null; });
